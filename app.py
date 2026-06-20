@@ -106,4 +106,13 @@ with tab2:
         st.markdown(f"<h2 style='text-align: center; color: #dc3545;'>{quiz['word']}</h2>", unsafe_allow_html=True)
         st.write("请选择正确的中文含义：")
         
-        for option in quiz
+        for option in quiz['options']:
+            if st.button(option, use_container_width=True, key=f"btn_{option}"):
+                st.session_state.quiz_total += 1
+                if option == quiz['correct']:
+                    st.session_state.quiz_score += 1
+                    st.success(f"🎉 答对了！ {quiz['word']} 的意思就是：{quiz['correct']}")
+                else:
+                    st.error(f"❌ 答错了！ {quiz['word']} 的正确意思是：{quiz['correct']}")
+                st.session_state.current_quiz = None
+                st.button("进入下一题 ➡️")
