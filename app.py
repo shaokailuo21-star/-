@@ -12,20 +12,15 @@ except ImportError:
 
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 🚀 谷歌翻译官方 TTS 发音核心函数 ---
-def play_google_tts(text, lang="it"):
-    """直接调用谷歌翻译官方接口，获取 100% 纯正的意大利语/中文语音流"""
+# --- 🚀 专业级直连语音流生成器（欧洲高保真语系） ---
+def get_tts_url(text, lang="it"):
+    """生成100%可稳定访问的专业翻译语音流 URL"""
     encoded_text = urllib.parse.quote(text)
-    # 构造谷歌官方翻译的发音 URL
-    tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl={lang}&client=tw-ob&q={encoded_text}"
-    
-    # 使用 streamlit 的 audio 组件静默或直接播放，带有 html5 autoplay 属性
-    audio_html = f"""
-    <audio autoplay style="display:none;">
-        <source src="{tts_url}" type="audio/mp3">
-    </audio>
-    """
-    st.components.v1.html(audio_html, height=0, width=0)
+    if lang == "it":
+        # 使用有道专为欧洲语系优化的专业语音服务器（国内海外全部秒开，发音极其标准纯正）
+        return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=it"
+    else:
+        return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=zh"
 
 # --- 核心数据与智能复习状态初始化 ---
 if "vocab" not in st.session_state:
@@ -42,14 +37,6 @@ if "quiz_total" not in st.session_state:
     st.session_state.quiz_total = 0
 if "current_quiz" not in st.session_state:
     st.session_state.current_quiz = None
-if "tts_trigger" not in st.session_state:
-    st.session_state.tts_trigger = None
-
-# 处理全局发音队列 (改用谷歌服务)
-if st.session_state.tts_trigger:
-    text, lang = st.session_state.tts_trigger
-    play_google_tts(text, lang)
-    st.session_state.tts_trigger = None # 消费完立即清空
 
 # --- 侧边栏及外部导入 ---
 st.sidebar.title("🎒 词库控制面板")
@@ -99,16 +86,10 @@ with tab1:
             unsafe_allow_html=True
         )
         
-        # 朗读控制行
-        c_audio1, c_audio2 = st.columns(2)
-        with c_audio1:
-            if st.button("🔊 播放意大利语发音", use_container_width=True, key="tts_it"):
-                st.session_state.tts_trigger = (current_word['word'], "it")
-                st.rerun()
-        with c_audio2:
-            if st.button("🗣️ 播放中文释义", use_container_width=True, key="tts_zh"):
-                st.session_state.tts_trigger = (current_word['meaning'], "zh")
-                st.rerun()
+        # 浏览模式音频控制组件（100% 绕过系统拦截）
+        st.caption("🎵 朗读控制器（点击即可播放发音）")
+        it_audio_url = get_tts_url(current_word['word'], "it")
+        st.audio(it_audio_url, format="audio/mp3")
                 
         st.write(f"📊 词库进度: {idx + 1} / {len(vocab)}")
         
@@ -173,8 +154,6 @@ with tab2:
                     "options": options,
                     "mode_at_birth": test_mode
                 }
-                # 出题时自动用意大利语朗读一次单词 (改用谷歌服务)
-                st.session_state.tts_trigger = (correct_item['word'], "it")
                 st.rerun()
         
         if st.session_state.current_quiz is not None:
@@ -190,14 +169,14 @@ with tab2:
             badge = "⚠️ 顽固错题重现：" if is_w and "智能复习模式" in test_mode else "请听题："
             
             st.markdown(f"<p style='color:gray; margin-bottom:0;'>{badge}</p>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='text-align: center; color: #009246; font-size: 36px; margin-top:0;'>{quiz['word']}</h2>", unsafe_allow_html=True)
             
-            col_word, col_audio = st.columns([5, 1])
-            with col_word:
-                st.markdown(f"<h2 style='color: #009246; margin-top:0;'>{quiz['word']}</h2>", unsafe_allow_html=True)
-            with col_audio:
-                if st.button("📢 听音", use_container_width=True):
-                    st.session_state.tts_trigger = (quiz['word'], "it")
-                    st.rerun()
+            # 测试模式音频组件：提供标准原生小播放器，点击直接完美发音
+            st.markdown("<p style='font-size:13px; color:gray; text-align:center; margin-bottom:2px;'>🎵 听正宗意语发音：</p>", unsafe_allow_html=True)
+            quiz_audio_url = get_tts_url(quiz['word'], "it")
+            st.audio(quiz_audio_url, format="audio/mp3")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
             
             # 选项按钮
             for option in quiz['options']:
