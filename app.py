@@ -155,8 +155,8 @@ with tab2:
         if st.session_state.current_quiz is not None:
             quiz = st.session_state.current_quiz
             
-            # 如果用户在答题中途切了模式，强制清除当前题重刷，防止卡死
-            if quiz["mode_at_birth"] != test_mode:
+            # 【安全修复】使用 .get() 避免旧缓存导致的 KeyError 崩溃
+            if quiz.get("mode_at_birth", None) != test_mode:
                 st.session_state.current_quiz = None
                 st.rerun()
                 
@@ -178,13 +178,13 @@ with tab2:
                         st.session_state.quiz_score += 1
                         st.success(f"🎉 答对了！【{quiz['word']}】就是：{quiz['correct']}")
                         
-                        # 【核心智能更新逻辑】答对了：解除错误标记，并记下当前的答对时间戳
+                        # 答对了：解除错误标记，并记下当前的答对时间戳
                         st.session_state.memory_pool[quiz['word']]["is_wrong"] = False
                         st.session_state.memory_pool[quiz['word']]["last_correct_time"] = time.time()
                     else:
                         st.error(f"❌ 答错啦！【{quiz['word']}】的真正含义是：{quiz['correct']}")
                         
-                        # 【核心智能更新逻辑】答错了：打上顽固错题标记
+                        # 答错了：打上顽固错题标记
                         st.session_state.memory_pool[quiz['word']]["is_wrong"] = True
                     
                     st.session_state.current_quiz = None
