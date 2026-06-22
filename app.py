@@ -48,6 +48,7 @@ def get_local_audio(text, prefix=""):
     ensure_audio_dir()
     if not text or not text.strip():
         return None
+    # 彻底过滤文件名特殊字符，防止拼写解析断裂
     clean_filename = re.sub(r'[^\w]', '_', text.strip())[:30]
     file_path = f"local_audios/{prefix}_{clean_filename}.mp3"
     
@@ -102,13 +103,6 @@ st.sidebar.metric(label="🔴 当前顽固错题数", value=f"{wrong_count} 题"
 st.title("🇮🇹 意音圣经 · 声乐歌剧背词宝")
 st.caption("为中国留学生量身定制的音乐学院上课、排练、剧院生存刚需高频词库")
 
-# 强制为外部容器注入全局防网页翻译破坏的样式
-st.markdown("""
-    <style>
-        .notranslate { translate: no !important; }
-    </style>
-""", unsafe_allow_html=True)
-
 tab1, tab2, tab3 = st.tabs(["📖 实战泛读速记", "🕹️ 考前通关测试", "🎵 歌剧歌词自由泛读"])
 
 # ==================== 选项卡 1：浏览模式 ====================
@@ -117,14 +111,10 @@ with tab1:
     idx = st.session_state.browse_index
     if vocab and idx < len(vocab):
         current_word = vocab[idx]
-        st.markdown(f"""
-            <div class="notranslate" style="background-color: #f1f3f5; padding: 35px; border-radius: 15px; border-left: 6px solid #009246; margin: 20px 0; text-align: center;">
-                <h1 style="color: #009246; margin-bottom: 5px; font-size: 36px;">{current_word['word']}</h1>
-                <p style="color: #6c757d; font-style: italic; font-size: 16px;">[{current_word.get('pos', '')}]</p>
-                <hr style="border: 0; border-top: 1px solid #dee2e6; margin: 15px 0;">
-                <h3 style="color: #ce2b37; font-weight: bold; font-size: 24px;">{current_word['meaning']}</h3>
-            </div>
-        """, unsafe_allow_html=True)
+        
+        # 抛弃纯 HTML，改用原生极简安全卡片
+        st.info(f"🇮🇹 单词： {current_word['word']}   [{current_word.get('pos', '')}]")
+        st.success(f"🇨🇳 释义： {current_word['meaning']}")
         
         audio_file = get_local_audio(current_word['word'], prefix="word")
         if audio_file and os.path.exists(audio_file):
@@ -149,7 +139,7 @@ with tab2:
         st.warning("词库至少需要 4 个单词才能开启测试模式！")
     else:
         test_mode = st.radio("选择测试机制：", ["✨ 智能复习模式", "🎲 普通测试模式"], horizontal=True, key="test_mode_radio")
-        st.markdown("---")
+        st.divider()
         
         if st.session_state.current_quiz is None:
             current_time = time.time()
@@ -186,88 +176,8 @@ with tab2:
             st.metric(label="🎯 答对率", value=f"{st.session_state.quiz_score} / {st.session_state.quiz_total}")
             is_w = st.session_state.memory_pool.get(quiz['word'], {}).get("is_wrong", False)
             badge = "⚠️ 顽固错题重现：" if is_w and "智能复习模式" in test_mode else "请听题："
-            st.markdown(f"<p style='color:gray; margin-bottom:0;'>{badge}</p>", unsafe_allow_html=True)
             
-            st.markdown(f"""
-                <div class="notranslate" style="text-align:center; margin: 10px 0;">
-                    <h2 style="color: #009246; font-size: 36px; margin:0;">{quiz['word']}</h2>
-                </div>
-            """, unsafe_allow_html=True)
+            st.write(badge)
+            st.subheader(f"🎵 意语单词：{quiz['word']}")
             
             quiz_audio = get_local_audio(quiz['word'], prefix="quiz")
-            if quiz_audio and os.path.exists(quiz_audio):
-                st.audio(quiz_audio, format="audio/mp3")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            for option in quiz['options']:
-                if st.button(option, use_container_width=True, key=f"quiz_opt_{option}"):
-                    st.session_state.quiz_total += 1
-                    if option == quiz['correct']:
-                        st.success(f"🎉 答对了！")
-                        st.session_state.quiz_score += 1
-                        st.session_state.memory_pool[quiz['word']]["is_wrong"] = False
-                        st.session_state.memory_pool[quiz['word']]["last_correct_time"] = time.time()
-                    else:
-                        st.error(f"❌ 答错啦！正解是：{quiz['correct']}")
-                        st.session_state.memory_pool[quiz['word']]["is_wrong"] = True
-                    st.session_state.current_quiz = None
-                    st.rerun()
-
-# ==================== 🛠️ 选项卡 3：歌词自由泛读 ====================
-with tab3:
-    st.subheader("🎼 歌剧歌词智能泛读面板")
-    
-    lyric_source = st.radio("选择歌词来源：", ["📋 自由复制粘贴全新歌词", "📚 浏览经典内置唱段"], horizontal=True, key="lyric_src_radio")
-    
-    final_lyrics = []
-    input_title = ""
-    
-    if lyric_source == "📋 自由复制粘贴全新歌词":
-        st.markdown("#### 📥 请在下方粘贴你的意大利语歌词")
-        input_title = st.text_input("给这首歌曲起个名字（可选）：", placeholder="例如：Aria di Chiesa", key="song_title_input")
-        
-        user_lyric_text = st.text_area(
-            "把整段意大利语歌词直接粘贴在下面：", 
-            placeholder="Libiamo, libiamo ne' lieti calici...",
-            height=150,
-            key="lyrics_text_area"
-        )
-        
-        if user_lyric_text.strip():
-            raw_lines = [line.strip() for line in user_lyric_text.split("\n") if line.strip()]
-            for line in raw_lines:
-                if len(line) > 50:
-                    split_line = re.split(r'[,.;?!]', line)
-                    for sub in split_line:
-                        if sub.strip():
-                            final_lyrics.append({"original": sub.strip(), "translation": "自定义输入"})
-                else:
-                    final_lyrics.append({"original": line, "translation": "自定义输入"})
-    
-    else:
-        chosen_opera = st.selectbox("请选择要排练精读的内置唱段：", list(LYRIC_REPERTOIRE.keys()), key="opera_select")
-        final_lyrics = LYRIC_REPERTOIRE[chosen_opera]
-
-    if final_lyrics:
-        st.markdown("---")
-        display_title = input_title if lyric_source == '📋 自由复制粘贴全新歌词' and input_title else '选定唱段'
-        st.markdown(f"### 🎵 正在精读演练：{display_title}")
-        
-        # 核心防翻译干扰设计：强制包裹在不接受翻译的 HTML div 容器中
-        for idx, line in enumerate(final_lyrics):
-            col_text, col_play = st.columns([5, 3])
-            with col_text:
-                # 给意大利语原文强加 notranslate 属性，彻底根除手机翻译导致的 DOM 损坏
-                st.markdown(f"""
-                    <div class="notranslate" style="margin-bottom: 5px;">
-                        <span style="font-weight: bold; font-size: 16px; color: #111;">🇮🇹 {line['original']}</span>
-                    </div>
-                """, unsafe_allow_html=True)
-                if lyric_source != "📋 自由复制粘贴全新歌词":
-                    st.markdown(f"<p style='color: #ce2b37; font-size: 14px; margin-top:-2px;'>🇨🇳 {line['translation']}</p>", unsafe_allow_html=True)
-            with col_play:
-                lyric_audio = get_local_audio(line['original'], prefix=f"lyr_{idx}")
-                if lyric_audio and os.path.exists(lyric_audio):
-                    st.audio(lyric_audio, format="audio/mp3")
-            st.markdown("<hr style='border:0; border-top:1px dashed #dee2e6; margin:8px
