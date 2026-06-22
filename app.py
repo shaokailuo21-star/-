@@ -2,6 +2,7 @@ import streamlit as st
 import random
 import pandas as pd
 import time
+import urllib.parse
 
 # 引入独立词库文件
 try:
@@ -11,19 +12,20 @@ except ImportError:
 
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- JavaScript 浏览器原生发音辅助函数 ---
-def text_to_speech_js(text, lang="it-IT"):
-    """利用浏览器原生 Web Speech API 进行发音，无需任何后端依赖，丝滑流畅"""
-    js_code = f"""
-    <script>
-        var msg = new SpeechSynthesisUtterance();
-        msg.text = "{text}";
-        msg.lang = "{lang}";
-        msg.rate = 0.9; // 稍微放慢语速，方便听清声乐发音细节
-        window.speechSynthesis.speak(msg);
-    </script>
+# --- 🚀 谷歌翻译官方 TTS 发音核心函数 ---
+def play_google_tts(text, lang="it"):
+    """直接调用谷歌翻译官方接口，获取 100% 纯正的意大利语/中文语音流"""
+    encoded_text = urllib.parse.quote(text)
+    # 构造谷歌官方翻译的发音 URL
+    tts_url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl={lang}&client=tw-ob&q={encoded_text}"
+    
+    # 使用 streamlit 的 audio 组件静默或直接播放，带有 html5 autoplay 属性
+    audio_html = f"""
+    <audio autoplay style="display:none;">
+        <source src="{tts_url}" type="audio/mp3">
+    </audio>
     """
-    st.components.v1.html(js_code, height=0, width=0)
+    st.components.v1.html(audio_html, height=0, width=0)
 
 # --- 核心数据与智能复习状态初始化 ---
 if "vocab" not in st.session_state:
@@ -43,10 +45,10 @@ if "current_quiz" not in st.session_state:
 if "tts_trigger" not in st.session_state:
     st.session_state.tts_trigger = None
 
-# 处理全局发音队列
+# 处理全局发音队列 (改用谷歌服务)
 if st.session_state.tts_trigger:
     text, lang = st.session_state.tts_trigger
-    text_to_speech_js(text, lang)
+    play_google_tts(text, lang)
     st.session_state.tts_trigger = None # 消费完立即清空
 
 # --- 侧边栏及外部导入 ---
@@ -101,11 +103,11 @@ with tab1:
         c_audio1, c_audio2 = st.columns(2)
         with c_audio1:
             if st.button("🔊 播放意大利语发音", use_container_width=True, key="tts_it"):
-                st.session_state.tts_trigger = (current_word['word'], "it-IT")
+                st.session_state.tts_trigger = (current_word['word'], "it")
                 st.rerun()
         with c_audio2:
             if st.button("🗣️ 播放中文释义", use_container_width=True, key="tts_zh"):
-                st.session_state.tts_trigger = (current_word['meaning'], "zh-CN")
+                st.session_state.tts_trigger = (current_word['meaning'], "zh")
                 st.rerun()
                 
         st.write(f"📊 词库进度: {idx + 1} / {len(vocab)}")
@@ -171,8 +173,8 @@ with tab2:
                     "options": options,
                     "mode_at_birth": test_mode
                 }
-                # 💥 【新体验】出题时自动用意大利语朗读一次单词
-                st.session_state.tts_trigger = (correct_item['word'], "it-IT")
+                # 出题时自动用意大利语朗读一次单词 (改用谷歌服务)
+                st.session_state.tts_trigger = (correct_item['word'], "it")
                 st.rerun()
         
         if st.session_state.current_quiz is not None:
@@ -189,13 +191,12 @@ with tab2:
             
             st.markdown(f"<p style='color:gray; margin-bottom:0;'>{badge}</p>", unsafe_allow_html=True)
             
-            # 把题目单词做成可以点击发音的互动式大标题
             col_word, col_audio = st.columns([5, 1])
             with col_word:
                 st.markdown(f"<h2 style='color: #009246; margin-top:0;'>{quiz['word']}</h2>", unsafe_allow_html=True)
             with col_audio:
                 if st.button("📢 听音", use_container_width=True):
-                    st.session_state.tts_trigger = (quiz['word'], "it-IT")
+                    st.session_state.tts_trigger = (quiz['word'], "it")
                     st.rerun()
             
             # 选项按钮
