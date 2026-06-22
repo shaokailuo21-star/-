@@ -13,9 +13,19 @@ except ImportError:
 
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 🚀 专业级直连语音流生成器 ---
+# --- 🚀 修复版：支持超长文本的语音流生成器 ---
 def get_tts_url(text, lang="it"):
-    encoded_text = urllib.parse.quote(text)
+    """
+    对长文本进行安全截取，网易有道接口最大支持约 100 字符。
+    歌词太长时如果直接塞进去会遭遇服务器断流，这里做安全保护。
+    """
+    # 过滤掉一些乱七八糟的特殊字符，只保留干净的台词
+    clean_text = text.strip().replace('"', '').replace('《', '').replace('》', '')
+    if len(clean_text) > 80:
+        # 如果单行歌词实在太丧心病狂的长，强制截取前 80 个字符，保证至少能放出前半句的声音
+        clean_text = clean_text[:80]
+        
+    encoded_text = urllib.parse.quote(clean_text)
     if lang == "it":
         return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=it"
     else:
@@ -51,6 +61,8 @@ if uploaded_file is not None:
             st.session_state.vocab = new_vocab
             st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in new_vocab}
             st.sidebar.success(f"成功导入 {len(new_vocab)} 个外部单词！")
+        else:
+            st.sidebar.error("CSV 文件必须包含 'word' 和 'meaning' 两列！")
     except Exception as e:
         st.sidebar.error(f"读取失败: {e}")
 
@@ -143,12 +155,11 @@ with tab2:
                     st.session_state.current_quiz = None
                     st.rerun()
 
-# ==================== 🛠️ 选项卡 3：歌词自由泛读（全新升级） ====================
+# ==================== 🛠️ 选项卡 3：歌词自由泛读 ====================
 with tab3:
     st.subheader("🎼 歌剧歌词智能泛读面板")
     st.caption("支持自由输入全新歌词。系统将自动为你进行单句拆分并匹配实时纯正意语朗读音频。")
     
-    # 模式切换：选择自带模板还是自己粘贴
     lyric_source = st.radio("选择歌词来源：", ["📋 自由复制粘贴全新歌词", "📚 浏览经典内置唱段"], horizontal=True)
     
     final_lyrics = []
@@ -157,29 +168,33 @@ with tab3:
         st.markdown("#### 📥 请在下方粘贴你的意大利语歌词")
         input_title = st.text_input("给这首歌曲起个名字（可选）：", placeholder="例如：Aria di Chiesa")
         
-        # 核心：文本输入大框
         user_lyric_text = st.text_area(
             "把整段意大利语歌词直接粘贴在下面：", 
-            placeholder="Libiamo, libiamo ne' lieti calici...\n(支持换行，系统会按行自动断句发音)",
+            placeholder="Libiamo, libiamo ne' lieti calici...\n(注意：复制进来的歌词请尽量保持一行一句，效果最好哦！)",
             height=200
         )
         
         if user_lyric_text.strip():
-            # 智能断句解析：清洗空行并按行切分
+            # 【核心改进】：不仅按换行拆，如果单行有分号或句号，进一步做智能分句，防止文本过长撑爆语音接口
             raw_lines = [line.strip() for line in user_lyric_text.split("\n") if line.strip()]
             for line in raw_lines:
-                final_lyrics.append({"original": line, "translation": "自定义输入（专注听音与弹舌排练）"})
+                # 如果一行里面字数过多（比如把整段歌词密密麻麻粘在一行），我们按标点符号切开
+                if len(line) > 60 and (";" in line or "," in line or "." in line):
+                    sub_lines = line.replace(";", "\n").replace(".", "\n").split("\n")
+                    for sub in sub_lines:
+                        if sub.strip():
+                            final_lyrics.append({"original": sub.strip(), "translation": "自定义输入"})
+                else:
+                    final_lyrics.append({"original": line, "translation": "自定义输入"})
     
     else:
-        # 浏览内置模板模式
         chosen_opera = st.selectbox("请选择要排练精读的内置唱段：", list(LYRIC_REPERTOIRE.keys()))
         final_lyrics = LYRIC_REPERTOIRE[chosen_opera]
 
-    # --- 渲染并输出解析后的高保真精读发音控制区 ---
+    # --- 渲染音频区 ---
     if final_lyrics:
         st.markdown("---")
         st.markdown(f"### 🎵 正在精读演练：{input_title if lyric_source == '📋 自由复制粘贴全新歌词' and input_title else '选定唱段'}")
-        st.caption("💡 提示：点击每句歌词下方的播放器，即可倾听最标准、毫无散装英语口音的意大利语纯正朗读。")
         
         for idx, line in enumerate(final_lyrics):
             with st.container():
@@ -189,8 +204,9 @@ with tab3:
                     if lyric_source != "📋 自由复制粘贴全新歌词":
                         st.markdown(f"<p style='color: #ce2b37; font-size: 14px; margin-top:-5px;'>🇨🇳 {line['translation']}</p>", unsafe_allow_html=True)
                 with col_play:
+                    # 传入修复后的高保真安全接口
                     line_audio = get_tts_url(line['original'], "it")
                     st.audio(line_audio, format="audio/mp3")
                 st.markdown("<hr style='border:0; border-top:1px dashed #dee2e6; margin:8px 0;'>", unsafe_allow_html=True)
     else:
-        st.info("💡 期待你的台词！请在上方框中粘贴歌词，或者切换到“内置唱段”直接体验。")
+        st.info("💡 期待你的台词！请在上方框中粘贴歌词。")
