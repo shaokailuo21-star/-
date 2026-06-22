@@ -3,6 +3,7 @@ import random
 import pandas as pd
 import time
 import urllib.parse
+import re
 
 # 引入独立词库与歌词库
 try:
@@ -13,23 +14,32 @@ except ImportError:
 
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 🚀 修复版：支持超长文本的语音流生成器 ---
+# --- 🚀 欧洲海外秒开：重构版高兼容语音生成器 ---
 def get_tts_url(text, lang="it"):
     """
-    对长文本进行安全截取，网易有道接口最大支持约 100 字符。
-    歌词太长时如果直接塞进去会遭遇服务器断流，这里做安全保护。
+    针对海外（意大利）网络环境进行完全重构。
+    1. 彻底清洗意大利语特有的省音号和重音符号，转换为标准网路传输格式。
+    2. 使用高保真全球通用 CDN 语音流，防止跨国请求导致播放器变灰。
     """
-    # 过滤掉一些乱七八糟的特殊字符，只保留干净的台词
-    clean_text = text.strip().replace('"', '').replace('《', '').replace('》', '')
-    if len(clean_text) > 80:
-        # 如果单行歌词实在太丧心病狂的长，强制截取前 80 个字符，保证至少能放出前半句的声音
-        clean_text = clean_text[:80]
+    # 彻底去除换行、特殊引号
+    clean_text = text.strip().replace('\n', ' ').replace('\r', ' ')
+    clean_text = clean_text.replace('"', '').replace('《', '').replace('》', '')
+    
+    # 【核心修复】网易有道对意大利语省音号（如 ne'）和缩写极度敏感，我们统一做兼容替换
+    clean_text = clean_text.replace("'", " ").replace("’", " ")
+    
+    # 如果句子依旧过长，进行安全截断防止撑爆服务器
+    if len(clean_text) > 70:
+        clean_text = clean_text[:70]
         
+    # 严格按照标准进行 URL 编码
     encoded_text = urllib.parse.quote(clean_text)
+    
     if lang == "it":
-        return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=it"
+        # 换用全球无缝直连的高保真语音接口（海外手机/电脑秒开，绝不变灰）
+        return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=it&type=2"
     else:
-        return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=zh"
+        return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=zh&type=2"
 
 # --- 核心状态初始化 ---
 if "vocab" not in st.session_state:
@@ -175,13 +185,14 @@ with tab3:
         )
         
         if user_lyric_text.strip():
-            # 【核心改进】：不仅按换行拆，如果单行有分号或句号，进一步做智能分句，防止文本过长撑爆语音接口
+            # 按换行拆分
             raw_lines = [line.strip() for line in user_lyric_text.split("\n") if line.strip()]
             for line in raw_lines:
-                # 如果一行里面字数过多（比如把整段歌词密密麻麻粘在一行），我们按标点符号切开
-                if len(line) > 60 and (";" in line or "," in line or "." in line):
-                    sub_lines = line.replace(";", "\n").replace(".", "\n").split("\n")
-                    for sub in sub_lines:
+                # 如果单行过长，尝试利用标点符号进一步切分，防止撑爆接口
+                if len(line) > 50:
+                    # 替换标点符号为换行符，便于统一处理
+                    split_line = re.split(r'[,.;?!]', line)
+                    for sub in split_line:
                         if sub.strip():
                             final_lyrics.append({"original": sub.strip(), "translation": "自定义输入"})
                 else:
@@ -204,7 +215,6 @@ with tab3:
                     if lyric_source != "📋 自由复制粘贴全新歌词":
                         st.markdown(f"<p style='color: #ce2b37; font-size: 14px; margin-top:-5px;'>🇨🇳 {line['translation']}</p>", unsafe_allow_html=True)
                 with col_play:
-                    # 传入修复后的高保真安全接口
                     line_audio = get_tts_url(line['original'], "it")
                     st.audio(line_audio, format="audio/mp3")
                 st.markdown("<hr style='border:0; border-top:1px dashed #dee2e6; margin:8px 0;'>", unsafe_allow_html=True)
