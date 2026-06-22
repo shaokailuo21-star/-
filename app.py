@@ -2,7 +2,6 @@ import streamlit as st
 import random
 import pandas as pd
 import time
-import urllib.parse
 import re
 
 # --- 核心安全防护：内置标准保障词 ---
@@ -28,21 +27,49 @@ except ImportError:
 
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 🎯 终极全网络兼容：多轨备用语音流生成器 ---
-def get_tts_url(text, lang="it"):
-    clean_text = text.strip().replace('\n', ' ').replace('\r', ' ')
-    clean_text = clean_text.replace('"', '').replace('《', '').replace('》', '')
-    clean_text = clean_text.replace("'", " ").replace("’", " ")
+# --- 🎯 终极绝招：利用浏览器原生 JavaScript 语音引擎发音（不需要任何外部音频接口） ---
+def play_audio_js(text, lang="it-IT", key_id=""):
+    """
+    通过注入轻量 HTML5 浏览器核心 JS，直接调用手机/电脑本地的 Siri 或系统高保真语音。
+    完美解决海外 IP 被国内发音服务器拦截或变灰的死穴。
+    """
+    clean_text = text.strip().replace('\n', ' ').replace('\r', ' ').replace("'", "\\'").replace('"', '\\"')
     
-    if len(clean_text) > 60:
-        clean_text = clean_text[:60]
-        
-    encoded_text = urllib.parse.quote(clean_text)
-    
-    if lang == "it":
-        return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=it&type=3"
-    else:
-        return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=zh&type=3"
+    # 动态生成带有极简发音按钮的 HTML 组件
+    js_html = f"""
+    <button onclick="speak_{key_id}()" style="
+        background-color: #009246; 
+        color: white; 
+        border: none; 
+        padding: 10px 20px; 
+        border-radius: 25px; 
+        font-size: 15px; 
+        cursor: pointer; 
+        font-weight: bold; 
+        width: 100%;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin: 5px 0;
+    ">🔊 听标准朗读</button>
+
+    <script>
+    function speak_{key_id}() {{
+        // 检查浏览器是否支持原生语音合成
+        if ('speechSynthesis' in window) {{
+            window.speechSynthesis.cancel(); // 停止之前正在读的，防止重叠
+            var msg = new SpeechSynthesisUtterance();
+            msg.text = "{clean_text}";
+            msg.lang = "{lang}";
+            msg.volume = 1; // 音量 (0 到 1)
+            msg.rate = 0.9;  // 语速 (稍稍放慢一点，方便声乐系听清连音和发音细节)
+            msg.pitch = 1;  // 音调
+            window.speechSynthesis.speak(msg);
+        }} else {{
+            alert("抱歉，您的浏览器内核过旧，不支持原生发音，请更换 Chrome 或 Safari 浏览器！");
+        }}
+    }}
+    </script>
+    """
+    return js_html
 
 # --- 核心状态初始化 ---
 if "vocab" not in st.session_state:
@@ -103,17 +130,9 @@ with tab1:
             </div>
         """, unsafe_allow_html=True)
         
-        # 🔥 【高兼容重构】干掉灰色播放条，直接换成发音小气泡
-        audio_url = get_tts_url(current_word['word'], "it")
-        st.markdown(f"""
-            <div style="text-align:center; margin: 15px 0;">
-                <a href="{audio_url}" target="_blank" style="text-decoration:none;">
-                    <button style="background-color:#009246; color:white; border:none; padding:12px 28px; border-radius:30px; font-size:16px; cursor:pointer; font-weight:bold; width:100%; max-width:300px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                        🔊 点击聆听纯正意语发音
-                    </button>
-                </a>
-            </div>
-        """, unsafe_allow_html=True)
+        # 渲染完全免疫封锁的原生发音小气泡
+        btn_html = play_audio_js(current_word['word'], lang="it-IT", key_id=f"word_{idx}")
+        st.components.v1.html(btn_html, height=60)
         
         st.write(f"📊 词库进度: {idx + 1} / {len(vocab)}")
         
@@ -170,21 +189,13 @@ with tab2:
                 
             st.metric(label="🎯 答对率", value=f"{st.session_state.quiz_score} / {st.session_state.quiz_total}")
             is_w = st.session_state.memory_pool.get(quiz['word'], {}).get("is_wrong", False)
-            badge = "⚠️ 顽固错题重现：" if is_w and "智能复习模式" in test_mode else "请听题："
+            badge = "⚠️ 顽固错题重现：" if is_w and "智能复婚模式" in test_mode else "请听题："
             st.markdown(f"<p style='color:gray; margin-bottom:0;'>{badge}</p>", unsafe_allow_html=True)
             st.markdown(f"<h2 style='text-align: center; color: #009246; font-size: 36px; margin-top:0;'>{quiz['word']}</h2>", unsafe_allow_html=True)
             
-            # 测试模式发音按钮
-            audio_url = get_tts_url(quiz['word'], "it")
-            st.markdown(f"""
-                <div style="text-align:center; margin: 15px 0;">
-                    <a href="{audio_url}" target="_blank" style="text-decoration:none;">
-                        <button style="background-color:#009246; color:white; border:none; padding:10px 24px; border-radius:30px; font-size:15px; cursor:pointer; font-weight:bold; width:100%; max-width:250px;">
-                            🔊 听发音盲听测试
-                        </button>
-                    </a>
-                </div>
-            """, unsafe_allow_html=True)
+            # 测试模式系统原生发音
+            quiz_btn_html = play_audio_js(quiz['word'], lang="it-IT", key_id="quiz_current")
+            st.components.v1.html(quiz_btn_html, height=60)
             
             st.markdown("<br>", unsafe_allow_html=True)
             
@@ -249,17 +260,9 @@ with tab3:
                     if lyric_source != "📋 自由复制粘贴全新歌词":
                         st.markdown(f"<p style='color: #ce2b37; font-size: 14px; margin-top:-5px;'>🇨🇳 {line['translation']}</p>", unsafe_allow_html=True)
                 with col_play:
-                    line_audio = get_tts_url(line['original'], "it")
-                    # 歌词列表里也换成高兼容发音按钮
-                    st.markdown(f"""
-                        <div style="margin-top: 5px;">
-                            <a href="{line_audio}" target="_blank" style="text-decoration:none;">
-                                <button style="background-color:#ce2b37; color:white; border:none; padding:6px 14px; border-radius:15px; font-size:13px; cursor:pointer; width:100%;">
-                                    🎵 单句朗读
-                                </button>
-                            </a>
-                        </div>
-                    """, unsafe_allow_html=True)
+                    # 歌词列表完美调用浏览器底层，原地出声，拒绝新标签页
+                    lyric_btn_html = play_audio_js(line['original'], lang="it-IT", key_id=f"lyric_{idx}")
+                    st.components.v1.html(lyric_btn_html, height=55)
                 st.markdown("<hr style='border:0; border-top:1px dashed #dee2e6; margin:8px 0;'>", unsafe_allow_html=True)
     else:
         st.info("💡 期待你的台词！请在上方框中粘贴歌词。")
