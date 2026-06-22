@@ -28,93 +28,18 @@ except ImportError:
 
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 🎯 终极全网络兼容：多轨备用语音流生成器（用于给不支持意语本地包的设备兜底） ---
-def get_backup_tts_url(text):
-    encoded_text = urllib.parse.quote(text.strip())
-    # 强制锁定有道意语独立标准引擎（通过原生 audio 触发防止 500）
-    return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=it&type=3"
-
-# --- 🎯 强力重构：强制锁定正宗意大利语发音引擎 ---
-def play_audio_js(text, key_id=""):
+# --- 🎯 绝招：使用免翻、防翻译篡改的全球高保真语音信道 ---
+def get_tts_url(text):
     """
-    通过 JS 强制过滤出手机/电脑系统内的纯正意大利语发音人（it-IT）。
-    如果检测到系统只有英语发音人，则物理切断本地朗读，自动启用线上正宗意语高保真媒体流，
-    双重保险彻底封死“英语腔”！
+    换用专门针对海外公网加速的标准发音网关，不再使用JS大括号，
+    彻底免疫手机“网页翻译”带来的代码崩塌，并且修复 500 拒绝访问问题。
     """
-    clean_text = text.strip().replace('\n', ' ').replace('\r', ' ').replace("'", "\\'").replace('"', '\\"')
-    backup_url = get_backup_tts_url(text)
-    
-    js_html = f"""
-    <div style="text-align: center; margin: 2px 0;">
-        <button id="btn_{key_id}" onclick="speak_{key_id}()" style="
-            background-color: #009246; 
-            color: white; 
-            border: none; 
-            padding: 10px 20px; 
-            border-radius: 25px; 
-            font-size: 15px; 
-            cursor: pointer; 
-            font-weight: bold; 
-            width: 100%;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        ">🔊 听标准意大利语朗读</button>
-        
-        <audio id="audio_{key_id}" src="{backup_url}" type="audio/mp3" style="display:none;"></audio>
-    </div>
-
-    <script>
-    function speak_{key_id}() {{
-        if ('speechSynthesis' in window) {{
-            window.speechSynthesis.cancel(); // 停止残余发音
-            
-            var msg = new SpeechSynthesisUtterance();
-            msg.text = "{clean_text}";
-            msg.lang = "it-IT";
-            msg.rate = 0.85; // 略微放慢，确保声乐大舌音、连音细节清晰
-            
-            // 【核心黑科技】强制在手机浏览器中滤出真正的意大利发音人
-            var voices = window.speechSynthesis.getVoices();
-            var italianVoice = null;
-            
-            for (var i = 0; i < voices.length; i++) {{
-                if (voices[i].lang.indexOf('it') === 0 || voices[i].lang.toLowerCase().includes('it-it')) {{
-                    italianVoice = voices[i];
-                    break;
-                }}
-            }}
-            
-            // 如果找到了本地纯正意语发音人，直接完美原地发音
-            if (italianVoice) {{
-                msg.voice = italianVoice;
-                window.speechSynthesis.speak(msg);
-            }} else {{
-                // 如果系统死活只有英语发音人，立刻启动物理兜底：播放正宗意语线上流，绝不用英语读！
-                var audioPlayer = document.getElementById('audio_{key_id}');
-                if (audioPlayer) {{
-                    audioPlayer.currentTime = 0;
-                    audioPlayer.play().catch(function(e) {{
-                        // 如果浏览器拦截了自动播放，就直接带头部跳转播放，确保绝对能发音
-                        window.open("{backup_url}", "_blank");
-                    }});
-                }}
-            }}
-        } else {{
-            // 极老旧内核直接使用媒体流
-            var audioPlayer = document.getElementById('audio_{key_id}');
-            if (audioPlayer) audioPlayer.play();
-        }}
-    }}
-    
-    // 预加载防延迟
-    if ('speechSynthesis' in window) {{
-        window.speechSynthesis.getVoices();
-        if (window.speechSynthesis.onvoiceschanged !== undefined) {{
-            window.speechSynthesis.onvoiceschanged = window.speechSynthesis.getVoices;
-        }}
-    }}
-    </script>
-    """
-    return js_html
+    clean_text = text.strip().replace('\n', ' ').replace('\r', ' ')
+    # 过滤掉非标准字符
+    clean_text = re.sub(r'[《》"“”]', '', clean_text)
+    encoded_text = urllib.parse.quote(clean_text)
+    # 采用开放式高兼容意语专属节点（海外公网直接解码，不会返回 Whitelabel Error 500）
+    return f"https://translate.google.com/translate_tts?ie=UTF-8&tl=it&client=tw-ob&q={encoded_text}"
 
 # --- 核心状态初始化 ---
 if "vocab" not in st.session_state:
@@ -175,9 +100,9 @@ with tab1:
             </div>
         """, unsafe_allow_html=True)
         
-        # 强制锁定纯正意语的发音按钮
-        btn_html = play_audio_js(current_word['word'], key_id=f"word_{idx}")
-        st.components.v1.html(btn_html, height=55)
+        # 使用不带任何大括号干扰的标准独立音频组件（安全绿色直连）
+        audio_src = get_tts_url(current_word['word'])
+        st.audio(audio_src, format="audio/mp3")
         
         st.write(f"📊 词库进度: {idx + 1} / {len(vocab)}")
         
@@ -238,9 +163,8 @@ with tab2:
             st.markdown(f"<p style='color:gray; margin-bottom:0;'>{badge}</p>", unsafe_allow_html=True)
             st.markdown(f"<h2 style='text-align: center; color: #009246; font-size: 36px; margin-top:0;'>{quiz['word']}</h2>", unsafe_allow_html=True)
             
-            # 测试模式强制意语发音
-            quiz_btn_html = play_audio_js(quiz['word'], key_id="quiz_current")
-            st.components.v1.html(quiz_btn_html, height=55)
+            audio_src = get_tts_url(quiz['word'])
+            st.audio(audio_src, format="audio/mp3")
             
             st.markdown("<br>", unsafe_allow_html=True)
             
@@ -305,9 +229,8 @@ with tab3:
                     if lyric_source != "📋 自由复制粘贴全新歌词":
                         st.markdown(f"<p style='color: #ce2b37; font-size: 14px; margin-top:-5px;'>🇨🇳 {line['translation']}</p>", unsafe_allow_html=True)
                 with col_play:
-                    # 歌词多句连读同样强制滤出纯正意语，消灭英语腔
-                    lyric_btn_html = play_audio_js(line['original'], key_id=f"lyric_{idx}")
-                    st.components.v1.html(lyric_btn_html, height=50)
+                    line_audio = get_tts_url(line['original'])
+                    st.audio(line_audio, format="audio/mp3")
                 st.markdown("<hr style='border:0; border-top:1px dashed #dee2e6; margin:8px 0;'>", unsafe_allow_html=True)
     else:
         st.info("💡 期待你的台词！请在上方框中粘贴歌词。")
