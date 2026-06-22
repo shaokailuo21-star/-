@@ -1,42 +1,43 @@
-# (此处代码结构保持不变，仅更新第 4 个 Tab 的逻辑)
+import streamlit as st
+import random
+import os
 
-# ==================== 🗂️ 选项卡 4：核心单词总表（含分类诊断器） ====================
+# --- 简单且稳固的初始化 ---
+st.set_page_config(page_title="背词宝", layout="centered")
+
+# 设置默认词库
+if "vocab" not in st.session_state:
+    st.session_state.vocab = [
+        {"word": "Spartito", "meaning": "乐谱", "pos": "音乐基础词汇"},
+        {"word": "Ripetere", "meaning": "重复", "pos": "上课常用词汇"},
+        {"word": "Sipario", "meaning": "帷幕", "pos": "排练演出词汇"}
+    ]
+
+# 侧边栏按钮：暴力重置
+if st.sidebar.button("🚨 强制重置词库"):
+    st.session_state.clear()
+    st.rerun()
+
+st.title("意音圣经 · 背词宝")
+tab1, tab2, tab3, tab4 = st.tabs(["泛读", "测试", "歌词", "总表"])
+
 with tab4:
-    st.subheader("🗂️ 核心单词总表面板")
+    st.subheader("核心单词总表")
+    vocab = st.session_state.vocab
     
-    vocab_list = st.session_state.vocab
-    categories = {
-        "🎵 音乐基础词汇": [],
-        "🏫 上课常用词汇": [],
-        "🎭 排练演出词汇": [],
-        "🌍 其他高频生存词": []
+    # 简单的分类逻辑
+    cats = {
+        "🎵 音乐基础": [i for i in vocab if "基础" in i['pos']],
+        "🏫 上课常用": [i for i in vocab if "上课" in i['pos']],
+        "🎭 排练演出": [i for i in vocab if "排练" in i['pos']]
     }
     
-    for item in vocab_list:
-        meaning = str(item.get('meaning', ''))
-        tag = str(item.get('pos', ''))
-        
-        # 宽泛化雷达逻辑
-        if any(k in meaning + tag for k in ["谱", "音", "唱", "声", "调", "节奏", "拍", "旋律", "小节", "音阶", "力度"]):
-            categories["🎵 音乐基础词汇"].append(item)
-        elif any(k in meaning + tag for k in ["重复", "开始", "停", "再", "听", "看", "读", "写", "错", "对", "明白", "知道", "问", "回答", "从", "到", "解释"]):
-            categories["🏫 上课常用词汇"].append(item)
-        elif any(k in meaning + tag for k in ["台", "幕", "剧", "演", "排练", "服装", "走位", "位置", "动作", "灯光", "指示", "角色", "乐队"]):
-            categories["🎭 排练演出词汇"].append(item)
-        else:
-            categories["🌍 其他高频生存词"].append(item)
-
-    # 诊断器：显示分类统计
-    st.info(f"📊 词库分布诊断：基础({len(categories['🎵 音乐基础词汇'])}) | 上课({len(categories['🏫 上课常用词汇'])}) | 排练({len(categories['🎭 排练演出词汇'])}) | 其他({len(categories['🌍 其他高频生存词'])})")
+    # 强制显示分类按钮
+    choice = st.radio("选择场景", list(cats.keys()), horizontal=True)
     
-    selected_cat = st.radio("👇 请选择生存场景：", options=list(categories.keys()), horizontal=True)
-    st.divider()
+    words_to_show = cats[choice]
+    st.write(f"当前分类：{choice} (共 {len(words_to_show)} 个词)")
     
-    target_words = categories[selected_cat]
-    st.markdown(f"### 当前：{selected_cat} *({len(target_words)} 个词)*")
-    
-    for word_idx, word_item in enumerate(target_words):
-        with st.expander(f"🇮🇹 {word_item['word']}"):
-            st.write(f"**中文含义**：{word_item['meaning']}")
-            st.write(f"**原始标签**：{word_item.get('pos', '无')}")
-            # ... (后续播放音频逻辑)
+    for item in words_to_show:
+        with st.expander(item['word']):
+            st.write(item['meaning'])
