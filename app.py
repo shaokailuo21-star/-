@@ -48,7 +48,6 @@ def get_local_audio(text, prefix=""):
     ensure_audio_dir()
     if not text or not text.strip():
         return None
-    # 彻底过滤文件名特殊字符，防止拼写解析断裂
     clean_filename = re.sub(r'[^\w]', '_', text.strip())[:30]
     file_path = f"local_audios/{prefix}_{clean_filename}.mp3"
     
@@ -91,7 +90,6 @@ if uploaded_file is not None:
             st.session_state.vocab = new_vocab
             st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in new_vocab}
             st.sidebar.success(f"成功导入 {len(new_vocab)} 个外部单词！")
-            st.rerun()
         else:
             st.sidebar.error("CSV 文件必须包含 'word' 和 'meaning' 两列！")
     except Exception as e:
@@ -112,7 +110,6 @@ with tab1:
     if vocab and idx < len(vocab):
         current_word = vocab[idx]
         
-        # 抛弃纯 HTML，改用原生极简安全卡片
         st.info(f"🇮🇹 单词： {current_word['word']}   [{current_word.get('pos', '')}]")
         st.success(f"🇨🇳 释义： {current_word['meaning']}")
         
@@ -141,7 +138,8 @@ with tab2:
         test_mode = st.radio("选择测试机制：", ["✨ 智能复习模式", "🎲 普通测试模式"], horizontal=True, key="test_mode_radio")
         st.divider()
         
-        if st.session_state.current_quiz is None:
+        # 彻底移除会阻断页面的 st.rerun()，改用平滑的条件生成
+        if st.session_state.current_quiz is None or st.session_state.current_quiz.get("mode_at_birth") != test_mode:
             current_time = time.time()
             ten_days_in_seconds = 10 * 24 * 60 * 60
             if "智能复习模式" in test_mode:
@@ -165,19 +163,89 @@ with tab2:
                 "options": options, 
                 "mode_at_birth": test_mode
             }
-            st.rerun()
         
-        if st.session_state.current_quiz is not None:
-            quiz = st.session_state.current_quiz
-            if quiz.get("mode_at_birth", "未知") != test_mode:
+        quiz = st.session_state.current_quiz
+        st.metric(label="🎯 答对率", value=f"{st.session_state.quiz_score} / {st.session_state.quiz_total}")
+        
+        is_w = st.session_state.memory_pool.get(quiz['word'], {}).get("is_wrong", False)
+        badge = "⚠️ 顽固错题重现：" if is_w and "智能复习模式" in test_mode else "请听题："
+        st.write(badge)
+        st.subheader(f"🎵 意语单词：{quiz['word']}")
+        
+        quiz_audio = get_local_audio(quiz['word'], prefix="quiz")
+        if quiz_audio and os.path.exists(quiz_audio):
+            st.audio(quiz_audio, format="audio/mp3")
+        
+        st.write("")
+        
+        # 用户点击选项后，立刻原地静默更新状态，防止跳回 Tab 1
+        for option in quiz['options']:
+            if st.button(option, use_container_width=True, key=f"quiz_opt_{option}"):
+                st.session_state.quiz_total += 1
+                if option == quiz['correct']:
+                    st.toast("🎉 答对了！", icon="✅")
+                    st.session_state.quiz_score += 1
+                    st.session_state.memory_pool[quiz['word']]["is_wrong"] = False
+                    st.session_state.memory_pool[quiz['word']]["last_correct_time"] = time.time()
+                else:
+                    st.toast(f"❌ 答错啦！正解是：{quiz['correct']}", icon="🚨")
+                    st.session_state.memory_pool[quiz['word']]["is_wrong"] = True
+                
+                # 瞬间刷新下一题状态，不强制刷新页面
                 st.session_state.current_quiz = None
                 st.rerun()
-                
-            st.metric(label="🎯 答对率", value=f"{st.session_state.quiz_score} / {st.session_state.quiz_total}")
-            is_w = st.session_state.memory_pool.get(quiz['word'], {}).get("is_wrong", False)
-            badge = "⚠️ 顽固错题重现：" if is_w and "智能复习模式" in test_mode else "请听题："
-            
-            st.write(badge)
-            st.subheader(f"🎵 意语单词：{quiz['word']}")
-            
-            quiz_audio = get_local_audio(quiz['word'], prefix="quiz")
+
+# ==================== 🛠️ 选项卡 3：歌词自由泛读 ====================
+with tab3:
+    st.subheader("🎼 歌剧歌词智能泛读面板")
+    
+    lyric_source = st.radio("选择歌词来源：", ["📋 自由复制粘贴全新歌词", "📚 浏览经典内置唱段"], horizontal=True, key="lyric_src_radio")
+    
+    final_lyrics = []
+    input_title = ""
+    
+    if lyric_source == "📋 自由复制粘贴全新歌词":
+        st.markdown("#### 📥 请在下方粘贴你的意大利语歌词")
+        input_title = st.text_input("给这首歌曲起个名字（可选）：", placeholder="例如：Aria di Chiesa", key="song_title_input")
+        
+        user_lyric_text = st.text_area(
+            "把整段意大利语歌词直接粘贴在下面：", 
+            placeholder="Libiamo, libiamo ne' lieti calici...",
+            height=150,
+            key="lyrics_text_area"
+        )
+        
+        if user_lyric_text.strip():
+            raw_lines = [line.strip() for line in user_lyric_text.split("\n") if line.strip()]
+            for line in raw_lines:
+                if len(line) > 50:
+                    split_line = re.split(r'[,.;?!]', line)
+                    for sub in split_line:
+                        if sub.strip():
+                            final_lyrics.append({"original": sub.strip(), "translation": "自定义输入"})
+                else:
+                    final_lyrics.append({"original": line, "translation": "自定义输入"})
+    
+    else:
+        chosen_opera = st.selectbox("请选择要排练精读的内置唱段：", list(LYRIC_REPERTOIRE.keys()), key="opera_select")
+        final_lyrics = LYRIC_REPERTOIRE[chosen_opera]
+
+    if final_lyrics:
+        st.divider()
+        display_title = input_title if lyric_source == '📋 自由复制粘贴全新歌词' and input_title else '选定唱段'
+        st.markdown(f"### 🎵 正在精读演练：{display_title}")
+        
+        # 100% 极简原生沙盒组件，绝不触发任何浏览器翻译引擎引发的空白
+        for idx, line in enumerate(final_lyrics):
+            col_text, col_play = st.columns([5, 3])
+            with col_text:
+                st.warning(f"🇮🇹 {line['original']}")
+                if lyric_source != "📋 自由复制粘贴全新歌词":
+                    st.info(f"🇨🇳 {line['translation']}")
+            with col_play:
+                lyric_audio = get_local_audio(line['original'], prefix=f"lyr_{idx}")
+                if lyric_audio and os.path.exists(lyric_audio):
+                    st.audio(lyric_audio, format="audio/mp3")
+            st.divider()
+    else:
+        st.info("💡 期待你的台词！请在上方框中粘贴歌词。")
