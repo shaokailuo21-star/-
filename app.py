@@ -229,7 +229,41 @@ with tab2:
                     
                     st.session_state.current_quiz = None
                     st.rerun()
-
+st.divider()
+    st.subheader("📚 错题本闯关模式")
+    
+    if not st.session_state.wrong_book:
+        st.success("暂无错题，继续加油！")
+    else:
+        # 如果还没开始闯关，显示按钮
+        if "is_wrong_quiz" not in st.session_state: st.session_state.is_wrong_quiz = False
+        
+        if not st.session_state.is_wrong_quiz:
+            if st.button("🚀 开始错题闯关"):
+                st.session_state.is_wrong_quiz = True
+                st.rerun()
+            st.write(f"当前有 {len(st.session_state.wrong_book)} 道错题待复习。")
+        else:
+            # 闯关逻辑：只显示一个随机错题
+            w_word = random.choice(st.session_state.wrong_book)
+            w_item = next((i for i in st.session_state.vocab if i['word'] == w_word), None)
+            
+            st.warning(f"请回答：{w_word} 的中文意思？")
+            ans = st.text_input("输入释义:", key="w_quiz_input")
+            
+            if st.button("提交答案"):
+                if ans == w_item['meaning']:
+                    st.success(f"✅ 正确！{w_word} 已掌握，移出列表。")
+                    st.session_state.wrong_book.remove(w_word)
+                    st.session_state.is_wrong_quiz = False
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error(f"❌ 不对，正确释义是：{w_item['meaning']}")
+            
+            if st.button("退出闯关"):
+                st.session_state.is_wrong_quiz = False
+                st.rerun()
     with t2_b:
         # === 【插入点：错题本展示】 ===
         st.subheader("📚 错题笔记")
