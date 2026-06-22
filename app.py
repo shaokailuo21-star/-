@@ -71,11 +71,10 @@ except Exception as e:
 # 设置页面属性
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 🪓 彻底粉碎死锁：不管三七二十一，只要初始变量有大词库，就必须无条件灌入 ---
+# --- 彻底粉碎死锁：只要初始变量有大词库，就必须无条件灌入 ---
 if "vocab" not in st.session_state:
     st.session_state.vocab = final_vocab_source
 else:
-    # 这一步极其重要：如果当前 session 里的词汇量太小，说明被锁死在默认保障词了，必须用大词库强行覆盖！
     if len(st.session_state.vocab) < len(final_vocab_source):
         st.session_state.vocab = final_vocab_source
 
@@ -94,9 +93,8 @@ if "current_quiz" not in st.session_state:
 # --- 侧边栏控制面板 ---
 st.sidebar.title("🎒 词库控制面板")
 
-# 终极威力清屏按钮：专门对付顽固的手机浏览器缓存
 if st.sidebar.button("🚨 强行擦除缓存，彻底刷新大词库", use_container_width=True):
-    st.session_state.clear() # 物理清空所有死锁状态
+    st.session_state.clear()
     st.session_state.vocab = final_vocab_source
     st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in final_vocab_source}
     st.session_state.browse_index = 0
@@ -265,14 +263,14 @@ with tab3:
                     st.audio(lyric_audio, format="audio/mp3")
             st.divider()
 
-# ==================== 🗂️ 选项卡 4：核心单词总表（场景点击升级版） ====================
+# ==================== 🗂️ 选项卡 4：核心单词总表（智能语义雷达升级版） ====================
 with tab4:
     st.subheader("🗂️ 核心单词总表面板")
-    st.caption("告别冗长滑动！点击上方大分类按钮，即可瞬间精准切换对应的实战词汇。")
+    st.caption("告别冗长滑动！点击下方大分类按钮，即可瞬间精准切换对应的实战词汇。")
     
     vocab_list = st.session_state.vocab
     
-    # 强制分类整理字典
+    # 初始化四个你期望看到的干净场景
     categories = {
         "🎵 音乐基础词汇": [],
         "🏫 上课常用词汇": [],
@@ -280,28 +278,34 @@ with tab4:
         "🌍 其他高频生存词": []
     }
     
+    # 🧠 【智能语义雷达】：扫描中文释义，根据留学生的高频动作词进行智能分配！
     for item in vocab_list:
-        tag = str(item.get('pos', '')).strip()
-        if "基础" in tag or "乐理" in tag or "音乐基础词汇" in tag:
+        meaning = str(item.get('meaning', ''))
+        word = str(item.get('word', '')).lower()
+        tag = str(item.get('pos', ''))
+        
+        # 1. 扫描“音乐基础词汇”雷达：高音、低音、乐谱、音符、拍子、节奏
+        if any(k in meaning for k in ["谱", "音", "唱", "声", "调", "节奏", "拍", "旋律", "小节"]) or any(k in tag for k in ["基础", "乐理"]):
             categories["🎵 音乐基础词汇"].append(item)
-        elif "上课" in tag or "常用" in tag or "课堂" in tag or "上课常用词汇" in tag:
+            
+        # 2. 扫描“上课常用词汇”雷达：重复、开始、停、再来、看、听、解释、明白
+        elif any(k in meaning for k in ["重复", "开始", "停", "再", "听", "看", "读", "写", "错", "对", "明白", "知道", "问", "回答", "从", "到"]):
             categories["🏫 上课常用词汇"].append(item)
-        elif "排练" in tag or "演出" in tag or "舞台" in tag or "剧院" in tag or "排练演出词汇" in tag:
+            
+        # 3. 扫描“排练演出词汇”雷达：舞台、幕、剧院、角色、服装、位置、走位、排练、乐团
+        elif any(k in meaning for k in ["台", "幕", "剧", "演", "排练", "服装", "词", "走位", "位置", "动作", "灯光"]):
             categories["🎭 排练演出词汇"].append(item)
+            
+        # 4. 其他落入通用
         else:
             categories["🌍 其他高频生存词"].append(item)
 
-    # 提取所有里面塞了单词的有效分类
-    available_tabs = [cat for cat, words in categories.items() if len(words) > 0]
-    
-    # 保障性双重兜底：如果算出来的分类为空，直接把整个现有词库丢进兜底分类
-    if not available_tabs:
-        available_tabs = ["🌍 其他高频生存词"]
-        categories["🌍 其他高频生存词"] = vocab_list
+    # 强制让所有分类至少显示出来，哪怕它匹配到的是空列表，也不允许它隐藏
+    all_scenes = ["🎵 音乐基础词汇", "🏫 上课常用词汇", "🎭 排练演出词汇", "🌍 其他高频生存词"]
         
     selected_cat = st.radio(
         "👇 **请选择你想查看的生存场景：**", 
-        options=available_tabs, 
+        options=all_scenes, 
         horizontal=True, 
         key="category_selector_radio"
     )
@@ -311,15 +315,18 @@ with tab4:
     target_words = categories[selected_cat]
     st.markdown(f"### 当前场景：{selected_cat} *({len(target_words)} 个词)*")
     
-    for word_idx, word_item in enumerate(target_words):
-        w_text = word_item['word']
-        w_meaning = word_item['meaning']
-        
-        with st.expander(f"🇮🇹 {w_text}", expanded=False):
-            col_m, col_a = st.columns([5, 3])
-            with col_m:
-                st.info(f"🇨🇳 中文释义：{w_meaning}")
-            with col_a:
-                dict_audio = get_local_audio(w_text, prefix=f"dict_scene_{selected_cat}_{word_idx}")
-                if dict_audio and os.path.exists(dict_audio):
-                    st.audio(dict_audio, format="audio/mp3")
+    if not target_words:
+        st.info("💡 智能雷达暂时还没把单词分到这组，你可以先看看其他三个大分类按钮哦！")
+    else:
+        for word_idx, word_item in enumerate(target_words):
+            w_text = word_item['word']
+            w_meaning = word_item['meaning']
+            
+            with st.expander(f"🇮🇹 {w_text}", expanded=False):
+                col_m, col_a = st.columns([5, 3])
+                with col_m:
+                    st.info(f"🇨🇳 中文释义：{w_meaning}")
+                with col_a:
+                    dict_audio = get_local_audio(w_text, prefix=f"dict_scene_{selected_cat}_{word_idx}")
+                    if dict_audio and os.path.exists(dict_audio):
+                        st.audio(dict_audio, format="audio/mp3")
