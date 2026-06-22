@@ -4,25 +4,24 @@ import pandas as pd
 import time
 import urllib.parse
 
-# 引入独立词库文件
+# 引入独立词库与歌词库
 try:
-    from vocab_data import MEGA_VOCAB
+    from vocab_data import MEGA_VOCAB, LYRIC_REPERTOIRE
 except ImportError:
-    MEGA_VOCAB = [{"word": "Caricamento...", "meaning": "词库加载中，请确保创建了 vocab_data.py", "pos": ""}]
+    MEGA_VOCAB = [{"word": "Caricamento...", "meaning": "词库加载中...", "pos": ""}]
+    LYRIC_REPERTOIRE = {"演示曲目": [{"original": "Nessun dorma", "translation": "无人入睡"}]}
 
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 🚀 专业级直连语音流生成器（欧洲高保真语系） ---
+# --- 🚀 专业级直连语音流生成器 ---
 def get_tts_url(text, lang="it"):
-    """生成100%可稳定访问的专业翻译语音流 URL"""
     encoded_text = urllib.parse.quote(text)
     if lang == "it":
-        # 使用有道专为欧洲语系优化的专业语音服务器（国内海外全部秒开，发音极其标准纯正）
         return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=it"
     else:
         return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=zh"
 
-# --- 核心数据与智能复习状态初始化 ---
+# --- 核心状态初始化 ---
 if "vocab" not in st.session_state:
     st.session_state.vocab = MEGA_VOCAB
 
@@ -38,7 +37,7 @@ if "quiz_total" not in st.session_state:
 if "current_quiz" not in st.session_state:
     st.session_state.current_quiz = None
 
-# --- 侧边栏及外部导入 ---
+# --- 侧边栏控制面板 ---
 st.sidebar.title("🎒 词库控制面板")
 uploaded_file = st.sidebar.file_uploader("导入外部额外词库 (CSV)", type=["csv"])
 
@@ -52,12 +51,8 @@ if uploaded_file is not None:
             st.session_state.vocab = new_vocab
             st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in new_vocab}
             st.sidebar.success(f"成功导入 {len(new_vocab)} 个外部单词！")
-        else:
-            st.sidebar.error("CSV 文件必须包含 'word' 和 'meaning' 两列！")
     except Exception as e:
-        st.sidebar.error(f"读取文件失败: {e}")
-
-st.sidebar.info(f"✨ 实战圣经词库已加载：共 {len(st.session_state.vocab)} 个词条")
+        st.sidebar.error(f"读取失败: {e}")
 
 wrong_count = sum(1 for v in st.session_state.memory_pool.values() if v["is_wrong"])
 st.sidebar.metric(label="🔴 当前顽固错题数", value=f"{wrong_count} 题")
@@ -65,34 +60,24 @@ st.sidebar.metric(label="🔴 当前顽固错题数", value=f"{wrong_count} 题"
 st.title("🇮🇹 意音圣经 · 声乐歌剧背词宝")
 st.caption("为中国留学生量身定制的音乐学院上课、排练、剧院生存刚需高频词库")
 
-tab1, tab2 = st.tabs(["📖 实战泛读速记", "🕹️ 考前通关测试"])
+tab1, tab2, tab3 = st.tabs(["📖 实战泛读速记", "🕹️ 考前通关测试", "🎵 歌剧歌词自由泛读"])
 
 # ==================== 选项卡 1：浏览模式 ====================
 with tab1:
     vocab = st.session_state.vocab
     idx = st.session_state.browse_index
-    
     if vocab:
         current_word = vocab[idx]
-        st.markdown(
-            f"""
+        st.markdown(f"""
             <div style="background-color: #f1f3f5; padding: 35px; border-radius: 15px; border-left: 6px solid #009246; margin: 20px 0; text-align: center;">
                 <h1 style="color: #009246; margin-bottom: 5px; font-size: 36px;">{current_word['word']}</h1>
                 <p style="color: #6c757d; font-style: italic; font-size: 16px;">[{current_word.get('pos', '')}]</p>
                 <hr style="border: 0; border-top: 1px solid #dee2e6; margin: 15px 0;">
                 <h3 style="color: #ce2b37; font-weight: bold; font-size: 24px;">{current_word['meaning']}</h3>
             </div>
-            """, 
-            unsafe_allow_html=True
-        )
-        
-        # 浏览模式音频控制组件（100% 绕过系统拦截）
-        st.caption("🎵 朗读控制器（点击即可播放发音）")
-        it_audio_url = get_tts_url(current_word['word'], "it")
-        st.audio(it_audio_url, format="audio/mp3")
-                
+        """, unsafe_allow_html=True)
+        st.audio(get_tts_url(current_word['word'], "it"), format="audio/mp3")
         st.write(f"📊 词库进度: {idx + 1} / {len(vocab)}")
-        
         col1, col2 = st.columns(2)
         with col1:
             if st.button("⬅️ 上一个单词", use_container_width=True) and idx > 0:
@@ -109,92 +94,103 @@ with tab2:
     if len(vocab) < 4:
         st.warning("词库至少需要 4 个单词才能开启测试模式！")
     else:
-        test_mode = st.radio(
-            "选择测试机制：",
-            ["✨ 智能复习模式 (错题死磕 + 答对拉黑10天)", "🎲 普通测试模式 (全词库随机轰炸)"],
-            horizontal=True
-        )
-        
+        test_mode = st.radio("选择测试机制：", ["✨ 智能复习模式 (错题死磕 + 答对拉黑10天)", "🎲 普通测试模式 (全词库随机轰炸)"], horizontal=True)
         st.markdown("---")
-        
         if st.session_state.current_quiz is None:
             current_time = time.time()
             ten_days_in_seconds = 10 * 24 * 60 * 60
-            
             if "智能复习模式" in test_mode:
                 wrong_pool = [item for item in vocab if st.session_state.memory_pool.get(item['word'], {}).get("is_wrong", False)]
-                if wrong_pool:
-                    correct_item = random.choice(wrong_pool)
+                if wrong_pool: correct_item = random.choice(wrong_pool)
                 else:
-                    review_pool = [
-                        item for item in vocab 
-                        if (current_time - st.session_state.memory_pool.get(item['word'], {}).get("last_correct_time", 0)) > ten_days_in_seconds
-                    ]
-                    if review_pool:
-                        correct_item = random.choice(review_pool)
-                    else:
-                        correct_item = None
-            else:
-                correct_item = random.choice(vocab)
+                    review_pool = [item for item in vocab if (current_time - st.session_state.memory_pool.get(item['word'], {}).get("last_correct_time", 0)) > ten_days_in_seconds]
+                    correct_item = random.choice(review_pool) if review_pool else None
+            else: correct_item = random.choice(vocab)
             
-            if correct_item is None:
-                st.balloons()
-                st.success("🥇 太强了！当前所有单词均已通关，且全部处于10日免修假期中！")
+            if correct_item is None: st.success("🥇 太强了！当前所有单词均已通关且处于10日免修期中！")
             else:
                 options = [correct_item['meaning']]
                 while len(options) < 4:
                     wrong_opt = random.choice(vocab)['meaning']
-                    if wrong_opt not in options:
-                        options.append(wrong_opt)
+                    if wrong_opt not in options: options.append(wrong_opt)
                 random.shuffle(options)
-                
-                st.session_state.current_quiz = {
-                    "word": correct_item['word'],
-                    "correct": correct_item['meaning'],
-                    "options": options,
-                    "mode_at_birth": test_mode
-                }
+                st.session_state.current_quiz = {"word": correct_item['word'], "correct": correct_item['meaning'], "options": options, "mode_at_birth": test_mode}
                 st.rerun()
         
         if st.session_state.current_quiz is not None:
             quiz = st.session_state.current_quiz
-            
             if quiz.get("mode_at_birth", None) != test_mode:
                 st.session_state.current_quiz = None
                 st.rerun()
-                
-            st.metric(label="🎯 答对率 (正确数/总尝试)", value=f"{st.session_state.quiz_score} / {st.session_state.quiz_total}")
-            
+            st.metric(label="🎯 答对率", value=f"{st.session_state.quiz_score} / {st.session_state.quiz_total}")
             is_w = st.session_state.memory_pool.get(quiz['word'], {}).get("is_wrong", False)
             badge = "⚠️ 顽固错题重现：" if is_w and "智能复习模式" in test_mode else "请听题："
-            
             st.markdown(f"<p style='color:gray; margin-bottom:0;'>{badge}</p>", unsafe_allow_html=True)
             st.markdown(f"<h2 style='text-align: center; color: #009246; font-size: 36px; margin-top:0;'>{quiz['word']}</h2>", unsafe_allow_html=True)
-            
-            # 测试模式音频组件：提供标准原生小播放器，点击直接完美发音
-            st.markdown("<p style='font-size:13px; color:gray; text-align:center; margin-bottom:2px;'>🎵 听正宗意语发音：</p>", unsafe_allow_html=True)
-            quiz_audio_url = get_tts_url(quiz['word'], "it")
-            st.audio(quiz_audio_url, format="audio/mp3")
-            
+            st.audio(get_tts_url(quiz['word'], "it"), format="audio/mp3")
             st.markdown("<br>", unsafe_allow_html=True)
-            
-            # 选项按钮
             for option in quiz['options']:
                 if st.button(option, use_container_width=True, key=f"quiz_opt_{option}"):
                     st.session_state.quiz_total += 1
-                    
                     if option == quiz['correct']:
+                        st.success(f"🎉 答对了！")
                         st.session_state.quiz_score += 1
-                        st.success(f"🎉 答对了！【{quiz['word']}】就是：{quiz['correct']}")
                         st.session_state.memory_pool[quiz['word']]["is_wrong"] = False
                         st.session_state.memory_pool[quiz['word']]["last_correct_time"] = time.time()
                     else:
-                        st.error(f"❌ 答错啦！【{quiz['word']}】的真正含义是：{quiz['correct']}")
+                        st.error(f"❌ 答错啦！正解是：{quiz['correct']}")
                         st.session_state.memory_pool[quiz['word']]["is_wrong"] = True
-                    
                     st.session_state.current_quiz = None
                     st.rerun()
-            
-            if st.session_state.current_quiz is None:
-                if st.button("进入下一题 ➡️", use_container_width=True):
-                    st.rerun()
+
+# ==================== 🛠️ 选项卡 3：歌词自由泛读（全新升级） ====================
+with tab3:
+    st.subheader("🎼 歌剧歌词智能泛读面板")
+    st.caption("支持自由输入全新歌词。系统将自动为你进行单句拆分并匹配实时纯正意语朗读音频。")
+    
+    # 模式切换：选择自带模板还是自己粘贴
+    lyric_source = st.radio("选择歌词来源：", ["📋 自由复制粘贴全新歌词", "📚 浏览经典内置唱段"], horizontal=True)
+    
+    final_lyrics = []
+    
+    if lyric_source == "📋 自由复制粘贴全新歌词":
+        st.markdown("#### 📥 请在下方粘贴你的意大利语歌词")
+        input_title = st.text_input("给这首歌曲起个名字（可选）：", placeholder="例如：Aria di Chiesa")
+        
+        # 核心：文本输入大框
+        user_lyric_text = st.text_area(
+            "把整段意大利语歌词直接粘贴在下面：", 
+            placeholder="Libiamo, libiamo ne' lieti calici...\n(支持换行，系统会按行自动断句发音)",
+            height=200
+        )
+        
+        if user_lyric_text.strip():
+            # 智能断句解析：清洗空行并按行切分
+            raw_lines = [line.strip() for line in user_lyric_text.split("\n") if line.strip()]
+            for line in raw_lines:
+                final_lyrics.append({"original": line, "translation": "自定义输入（专注听音与弹舌排练）"})
+    
+    else:
+        # 浏览内置模板模式
+        chosen_opera = st.selectbox("请选择要排练精读的内置唱段：", list(LYRIC_REPERTOIRE.keys()))
+        final_lyrics = LYRIC_REPERTOIRE[chosen_opera]
+
+    # --- 渲染并输出解析后的高保真精读发音控制区 ---
+    if final_lyrics:
+        st.markdown("---")
+        st.markdown(f"### 🎵 正在精读演练：{input_title if lyric_source == '📋 自由复制粘贴全新歌词' and input_title else '选定唱段'}")
+        st.caption("💡 提示：点击每句歌词下方的播放器，即可倾听最标准、毫无散装英语口音的意大利语纯正朗读。")
+        
+        for idx, line in enumerate(final_lyrics):
+            with st.container():
+                col_text, col_play = st.columns([5, 3])
+                with col_text:
+                    st.markdown(f"**🇮🇹 {line['original']}**")
+                    if lyric_source != "📋 自由复制粘贴全新歌词":
+                        st.markdown(f"<p style='color: #ce2b37; font-size: 14px; margin-top:-5px;'>🇨🇳 {line['translation']}</p>", unsafe_allow_html=True)
+                with col_play:
+                    line_audio = get_tts_url(line['original'], "it")
+                    st.audio(line_audio, format="audio/mp3")
+                st.markdown("<hr style='border:0; border-top:1px dashed #dee2e6; margin:8px 0;'>", unsafe_allow_html=True)
+    else:
+        st.info("💡 期待你的台词！请在上方框中粘贴歌词，或者切换到“内置唱段”直接体验。")
