@@ -5,7 +5,6 @@ import sys
 try:
     from gtts import gTTS
 except ImportError:
-    # 强制在后台静默安装 gTTS 语音组件
     subprocess.check_call([sys.executable, "-m", "pip", "install", "gTTS"])
     from gtts import gTTS
 
@@ -39,7 +38,7 @@ except ImportError:
 
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 🎯 绝对稳定：本地静态音频管理器（100% 物理免疫变灰与跨域） ---
+# --- 🎯 绝对稳定：本地静态音频管理器（防止页面空白优化版） ---
 @st.cache_resource
 def ensure_audio_dir():
     """创建服务器本地音频的安全避风港目录"""
@@ -48,25 +47,31 @@ def ensure_audio_dir():
 
 def get_local_audio(text, prefix=""):
     """
-    在云端服务器本地用高保真引擎实时合成标准的意大利语 MP3 文件。
-    手机端直接读取服务器本地音频流，0次外部跨域请求，彻底封死变灰和英语腔！
+    在云端服务器本地实时合成标准的意大利语 MP3 文件。
+    增加安全渲染防护，防止由于合成耗时导致前端组件变白。
     """
     ensure_audio_dir()
+    if not text or not text.strip():
+        return None
+        
     # 过滤文件名安全字符
     clean_filename = re.sub(r'[^\w]', '_', text.strip())[:30]
     file_path = f"local_audios/{prefix}_{clean_filename}.mp3"
     
-    # 如果本地还没有这个音频，立刻无缝生成
+    # 如果本地没有，则进行无缝合成
     if not os.path.exists(file_path):
         try:
-            # lang='it' 强制指定纯正意大利语语调，绝无英语腔
-            tts = gTTS(text=text.strip(), lang='it', slow=False)
+            # 限制单句最长字数，防止长歌词导致死锁
+            short_text = text.strip()[:100]
+            tts = gTTS(text=short_text, lang='it', slow=False)
             tts.save(file_path)
-        except Exception:
+        except Exception as e:
+            # 极端错误下打印，不抛出异常破坏页面布局
+            print(f"TTS Error: {e}")
             return None
     return file_path
 
-# --- 核心状态初始化 ---
+# --- 核心状态初始化（确保测试题永远有基础数据） ---
 if "vocab" not in st.session_state:
     st.session_state.vocab = MEGA_VOCAB
 
@@ -125,12 +130,12 @@ with tab1:
             </div>
         """, unsafe_allow_html=True)
         
-        # 100% 稳固的本地化音频
-        audio_file = get_local_audio(current_word['word'], prefix="word")
-        if audio_file:
-            st.audio(audio_file, format="audio/mp3")
-        else:
-            st.warning("🔊 正在努力为您排练意语发音，请稍等 1-2 秒刷新...")
+        with st.spinner("🔊 正在排练发音..."):
+            audio_file = get_local_audio(current_word['word'], prefix="word")
+            if audio_file and os.path.exists(audio_file):
+                st.audio(audio_file, format="audio/mp3")
+            else:
+                st.info("🔊 音频同步中，请再次点击或切换下一个")
         
         st.write(f"📊 词库进度: {idx + 1} / {len(vocab)}")
         
@@ -150,7 +155,7 @@ with tab2:
     if len(vocab) < 4:
         st.warning("词库至少需要 4 个单词才能开启测试模式！")
     else:
-        test_mode = st.radio("选择测试机制：", ["✨ 智能复习模式", "🎲 普通测试模式"], horizontal=True)
+        test_mode = st.radio("选择测试机制：", ["✨ 智能复习模式", "🎲 普通测试模式"], horizontal=True, key="test_mode_select")
         st.markdown("---")
         
         if st.session_state.current_quiz is None:
@@ -170,3 +175,39 @@ with tab2:
                 wrong_opt = random.choice(vocab)['meaning']
                 if wrong_opt not in options: options.append(wrong_opt)
             random.shuffle(options)
+            
+            st.session_state.current_quiz = {
+                "word": correct_item['word'], 
+                "correct": correct_item['meaning'], 
+                "options": options, 
+                "mode_at_birth": test_mode
+            }
+            st.rerun()
+        
+        if st.session_state.current_quiz is not None:
+            quiz = st.session_state.current_quiz
+            if quiz.get("mode_at_birth", "未知") != test_mode:
+                st.session_state.current_quiz = None
+                st.rerun()
+                
+            st.metric(label="🎯 答对率", value=f"{st.session_state.quiz_score} / {st.session_state.quiz_total}")
+            is_w = st.session_state.memory_pool.get(quiz['word'], {}).get("is_wrong", False)
+            badge = "⚠️ 顽固错题重现：" if is_w and "智能复习模式" in test_mode else "请听题："
+            st.markdown(f"<p style='color:gray; margin-bottom:0;'>{badge}</p>", unsafe_allow_html=True)
+            st.markdown(f"<h2 style='text-align: center; color: #009246; font-size: 36px; margin-top:0;'>{quiz['word']}</h2>", unsafe_allow_html=True)
+            
+            with st.spinner("🔊 正在为您准备测试音频..."):
+                quiz_audio = get_local_audio(quiz['word'], prefix="quiz")
+                if quiz_audio and os.path.exists(quiz_audio):
+                    st.audio(quiz_audio, format="audio/mp3")
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            for option in quiz['options']:
+                if st.button(option, use_container_width=True, key=f"quiz_opt_{option}"):
+                    st.session_state.quiz_total += 1
+                    if option == quiz['correct']:
+                        st.success(f"🎉 答对了！")
+                        st.session_state.quiz_score += 1
+                        st.session_state.memory_pool[quiz['word']]["is_wrong"] = False
+                        st.session_state.memory_pool[quiz['word']]["last_correct_time"] = time.time()
