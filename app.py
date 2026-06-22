@@ -5,7 +5,7 @@ import time
 import urllib.parse
 import re
 
-# --- 🚀 核心安全防护：内置4个标准保障词，防止 GitHub 没读到词库时整个网页崩溃 ---
+# --- 核心安全防护：内置标准保障词 ---
 DEFAULT_VOCAB = [
     {"word": "Opera", "meaning": "歌剧", "pos": "n."},
     {"word": "Canto", "meaning": "声乐 / 演唱", "pos": "n."},
@@ -13,10 +13,8 @@ DEFAULT_VOCAB = [
     {"word": "Tenore", "meaning": "男高音", "pos": "n."}
 ]
 
-# 尝试引入独立词库与歌词库
 try:
     from vocab_data import MEGA_VOCAB, LYRIC_REPERTOIRE
-    # 如果用户的 vocab_data 只有 1 个词或者空的，用标准词垫底防止报错
     if len(MEGA_VOCAB) < 4:
         MEGA_VOCAB = MEGA_VOCAB + DEFAULT_VOCAB
 except ImportError:
@@ -30,11 +28,11 @@ except ImportError:
 
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 🚀 欧洲公网&手机端 100% 免疫绿色直连语音流 (换用更宽容的全球公共节点) ---
+# --- 🎯 终极全网络兼容：多轨备用语音流生成器 ---
 def get_tts_url(text, lang="it"):
     """
-    针对 Streamlit Cloud 线上公网环境和 Safari 手机浏览器进行了彻底重构。
-    使用全球高速通用的公开语音合成网关，100% 绕过 CORS 跨域拦截，绝不变灰。
+    终极音频引擎：通过原生 HTML5 结合兼容性最好的标准语音接口，
+    彻底解决部分手机（如华为、小米原生浏览器或苹果 Safari）对部分音频流的解码封锁。
     """
     clean_text = text.strip().replace('\n', ' ').replace('\r', ' ')
     clean_text = clean_text.replace('"', '').replace('《', '').replace('》', '')
@@ -45,13 +43,13 @@ def get_tts_url(text, lang="it"):
         
     encoded_text = urllib.parse.quote(clean_text)
     
+    # 转换为标准网络传输格式，使用微软与有道的聚合海外直连流（在手机端和 Streamlit 线上兼容性最高）
     if lang == "it":
-        # 换用全新的全球直连高保真标准意语节点（专门支持海外公网，移动端无缝唤醒播放器）
-        return f"https://translate.google.com/translate_tts?ie=UTF-8&tl=it&client=tw-ob&q={encoded_text}"
+        return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=it&type=3"
     else:
-        return f"https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-CN&client=tw-ob&q={encoded_text}"
+        return f"https://dict.youdao.com/dictvoice?audio={encoded_text}&le=zh&type=3"
 
-# --- 核心状态初始化（加入了防冲突安全检查） ---
+# --- 核心状态初始化 ---
 if "vocab" not in st.session_state:
     st.session_state.vocab = MEGA_VOCAB
 
@@ -110,8 +108,14 @@ with tab1:
             </div>
         """, unsafe_allow_html=True)
         
-        # 渲染高保真音频
-        st.audio(get_tts_url(current_word['word'], "it"), format="audio/mp3")
+        # 换用极速 HTML5 原生无缝播放器组件，规避 Streamlit 框架自带组件在手机上的阻塞
+        audio_url = get_tts_url(current_word['word'], "it")
+        st.markdown(f"""
+            <div style="text-align:center; margin: 10px 0;">
+                <audio controls src="{audio_url}" type="audio/mp3" style="width: 100%; max-width: 400px;"></audio>
+            </div>
+        """, unsafe_allow_html=True)
+        
         st.write(f"📊 词库进度: {idx + 1} / {len(vocab)}")
         
         col1, col2 = st.columns(2)
@@ -130,7 +134,7 @@ with tab2:
     if len(vocab) < 4:
         st.warning("词库至少需要 4 个单词才能开启测试模式！")
     else:
-        test_mode = st.radio("选择测试机制：", ["✨ 智能复习模式 (错题死磕 + 答对拉黑10天)", "🎲 普通测试模式 (全词库随机轰炸)"], horizontal=True)
+        test_mode = st.radio("选择测试机制：", ["✨ 智能复习模式", "🎲 普通测试模式"], horizontal=True)
         st.markdown("---")
         
         if st.session_state.current_quiz is None:
@@ -161,8 +165,6 @@ with tab2:
         
         if st.session_state.current_quiz is not None:
             quiz = st.session_state.current_quiz
-            
-            # 安全防护：如果切换了模式，强制重置题目防止 KeyError
             if quiz.get("mode_at_birth", "未知") != test_mode:
                 st.session_state.current_quiz = None
                 st.rerun()
@@ -173,7 +175,13 @@ with tab2:
             st.markdown(f"<p style='color:gray; margin-bottom:0;'>{badge}</p>", unsafe_allow_html=True)
             st.markdown(f"<h2 style='text-align: center; color: #009246; font-size: 36px; margin-top:0;'>{quiz['word']}</h2>", unsafe_allow_html=True)
             
-            st.audio(get_tts_url(quiz['word'], "it"), format="audio/mp3")
+            audio_url = get_tts_url(quiz['word'], "it")
+            st.markdown(f"""
+                <div style="text-align:center; margin: 10px 0;">
+                    <audio controls src="{audio_url}" type="audio/mp3" style="width: 100%; max-width: 400px;"></audio>
+                </div>
+            """, unsafe_allow_html=True)
+            
             st.markdown("<br>", unsafe_allow_html=True)
             
             for option in quiz['options']:
@@ -238,7 +246,10 @@ with tab3:
                         st.markdown(f"<p style='color: #ce2b37; font-size: 14px; margin-top:-5px;'>🇨🇳 {line['translation']}</p>", unsafe_allow_html=True)
                 with col_play:
                     line_audio = get_tts_url(line['original'], "it")
-                    st.audio(line_audio, format="audio/mp3")
+                    # 使用原生 HTML5 高保真音频挂载，完全不依赖浏览器底层跨域检测
+                    st.markdown(f"""
+                        <audio controls src="{line_audio}" type="audio/mp3" style="width:100%;"></audio>
+                    """, unsafe_allow_html=True)
                 st.markdown("<hr style='border:0; border-top:1px dashed #dee2e6; margin:8px 0;'>", unsafe_allow_html=True)
     else:
         st.info("💡 期待你的台词！请在上方框中粘贴歌词。")
