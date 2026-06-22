@@ -2,7 +2,7 @@ import streamlit as st
 import random
 import pandas as pd
 
-st.set_page_config(page_title="意音圣经 · 卤豆腐的声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
+st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
 # --- 巨量扩容：声乐歌剧全场景实战生存词库（近600条） ---
 MEGA_VOCAB = [
@@ -68,7 +68,7 @@ MEGA_VOCAB = [
     {"word": "andare a tempo", "meaning": "跟上节奏", "pos": "phrase"},
     {"word": "fuori tempo", "meaning": "不合拍子 / 错拍", "pos": "phrase"},
     {"word": "attaccare", "meaning": "切入 / 进点 / 起唱", "pos": "v."},
-    {"word": "staccare il tempo", "meaning": "给出速度 / 进拍", "pos": "phrase"},
+    {"word": "staccate il tempo", "meaning": "给出速度 / 进拍", "pos": "phrase"},
     {"word": "andamento", "meaning": "速度 / 走势", "pos": "n."},
     {"word": "rubato", "meaning": "弹性速度 / 散板", "pos": "adj./n."},
     {"word": "tenere", "meaning": "拉住 (时值) / 保持", "pos": "v."},
@@ -206,7 +206,7 @@ MEGA_VOCAB = [
     {"word": "postura", "meaning": "站姿 / 唱歌体态", "pos": "n."},
     {"word": "messa di voce", "meaning": "渐强渐弱发声控制 (声音的洗礼)", "pos": "phrase"},
     {"word": "portamento", "meaning": "滑音", "pos": "n."},
-    {"word": "copertura", "meaning": "掩盖技术", "pos": "n."},
+    {"word": "copertura", "meaning": "声音掩盖技术", "pos": "n."},
     {"word": "filato", "meaning": "拉丝音 / 极弱的高音长线条", "pos": "n."},
     {"word": "impostazione", "meaning": "发声位置确定", "pos": "n."},
     {"word": "trillo", "meaning": "颤音 (花腔装饰音)", "pos": "n."},
@@ -243,7 +243,7 @@ MEGA_VOCAB = [
     {"word": "palco", "meaning": "包厢", "pos": "n."},
     {"word": "loggione", "meaning": "顶层看台 (通常是最挑剔的观众)", "pos": "n."},
     {"word": "camerino", "meaning": "后台化妆间", "pos": "n."},
-    {"word": "quinte", "meaning": "侧台", "pos": "n. pl."},
+    {"word": "quinte", "meaning": "侧台幕布后", "pos": "n. pl."},
     {"word": "entrare", "meaning": "上场", "pos": "v."},
     {"word": "uscire", "meaning": "下场", "pos": "v."},
     {"word": "camminare", "meaning": "行走", "pos": "v."},
@@ -269,7 +269,7 @@ MEGA_VOCAB = [
     {"word": "riflettore", "meaning": "追光灯", "pos": "n."},
     {"word": "oscurità", "meaning": "全黑 / 暗场", "pos": "n."},
     {"word": "buio pesto", "meaning": "漆黑一片", "pos": "n."},
-    {"word": "illuminazione", "meaning": "采光", "pos": "n."},
+    {"word": "illuminazione", "meaning": "采光 / 照明", "pos": "n."},
     {"word": "soprano", "meaning": "女高音", "pos": "n."},
     {"word": "tenore", "meaning": "男高音", "pos": "n."},
     {"word": "baritono", "meaning": "男中音", "pos": "n."},
@@ -531,4 +531,4 @@ with tab2:
         st.write("请选出符合该场景的正确中文释义：")
         
         for option in quiz['options']:
-            if st.button(option, use_container_width=True, key=f"btn_{option}"
+            if st.button(option, use_container_width=True, key=f"btn
