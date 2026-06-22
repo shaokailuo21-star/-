@@ -71,12 +71,16 @@ except Exception as e:
 # 设置页面属性
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 彻底粉碎死锁：只要初始变量有大词库，就必须无条件灌入 ---
+# --- 彻底粉碎死锁 ---
 if "vocab" not in st.session_state:
     st.session_state.vocab = final_vocab_source
 else:
     if len(st.session_state.vocab) < len(final_vocab_source):
         st.session_state.vocab = final_vocab_source
+
+# === 【插入点：初始化错题本】 ===
+if "wrong_book" not in st.session_state:
+    st.session_state.wrong_book = []
 
 if "memory_pool" not in st.session_state or len(st.session_state.memory_pool) < len(st.session_state.vocab):
     st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in st.session_state.vocab}
@@ -99,6 +103,7 @@ if st.sidebar.button("🚨 强行擦除缓存，彻底刷新大词库", use_cont
     st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in final_vocab_source}
     st.session_state.browse_index = 0
     st.session_state.current_quiz = None
+    st.session_state.wrong_book = []
     st.rerun()
 
 uploaded_file = st.sidebar.file_uploader("导入外部额外词库 (CSV)", type=["csv"], key="sidebar_uploader")
@@ -158,66 +163,85 @@ with tab1:
 
 # ==================== 选项卡 2：测试模式 ====================
 with tab2:
-    vocab = st.session_state.vocab
-    if len(vocab) < 4:
-        st.warning("词库至少需要 4 个单词才能开启测试模式！")
-    else:
-        test_mode = st.radio("选择测试机制：", ["✨ 智能复习模式", "🎲 普通测试模式"], horizontal=True, key="test_mode_radio")
-        st.divider()
-        
-        if st.session_state.current_quiz is None or st.session_state.current_quiz.get("mode_at_birth") != test_mode:
-            current_time = time.time()
-            ten_days_in_seconds = 10 * 24 * 60 * 60
-            if "智能复习模式" in test_mode:
-                wrong_pool = [item for item in vocab if st.session_state.memory_pool.get(item['word'], {}).get("is_wrong", False)]
-                if wrong_pool: correct_item = random.choice(wrong_pool)
-                else:
-                    review_pool = [item for item in vocab if (current_time - st.session_state.memory_pool.get(item['word'], {}).get("last_correct_time", 0)) > ten_days_in_seconds]
-                    correct_item = random.choice(review_pool) if review_pool else random.choice(vocab)
-            else: 
-                correct_item = random.choice(vocab)
+    # === 【插入点：分标签页】 ===
+    t2_a, t2_b = st.tabs(["🎯 闯关测试", "📚 我的错题本"])
+    with t2_a:
+        vocab = st.session_state.vocab
+        if len(vocab) < 4:
+            st.warning("词库至少需要 4 个单词才能开启测试模式！")
+        else:
+            test_mode = st.radio("选择测试机制：", ["✨ 智能复习模式", "🎲 普通测试模式"], horizontal=True, key="test_mode_radio")
+            st.divider()
             
-            options = [correct_item['meaning']]
-            while len(options) < 4:
-                wrong_opt = random.choice(vocab)['meaning']
-                if wrong_opt not in options: options.append(wrong_opt)
-            random.shuffle(options)
-            
-            st.session_state.current_quiz = {
-                "word": correct_item['word'], 
-                "correct": correct_item['meaning'], 
-                "options": options, 
-                "mode_at_birth": test_mode
-            }
-        
-        quiz = st.session_state.current_quiz
-        st.metric(label="🎯 答对率", value=f"{st.session_state.quiz_score} / {st.session_state.quiz_total}")
-        
-        is_w = st.session_state.memory_pool.get(quiz['word'], {}).get("is_wrong", False)
-        badge = "⚠️ 顽固错题重现：" if is_w and "智能复习模式" in test_mode else "请听题："
-        st.write(badge)
-        st.subheader(f"🎵 意语单词：{quiz['word']}")
-        
-        quiz_audio = get_local_audio(quiz['word'], prefix="quiz")
-        if quiz_audio and os.path.exists(quiz_audio):
-            st.audio(quiz_audio, format="audio/mp3")
-        
-        st.write("")
-        
-        for option in quiz['options']:
-            if st.button(option, use_container_width=True, key=f"quiz_opt_{option}"):
-                st.session_state.quiz_total += 1
-                if option == quiz['correct']:
-                    st.toast("🎉 答对了！", icon="✅")
-                    st.session_state.quiz_score += 1
-                    st.session_state.memory_pool[quiz['word']]["is_wrong"] = False
-                    st.session_state.memory_pool[quiz['word']]["last_correct_time"] = time.time()
-                else:
-                    st.toast(f"❌ 答错啦！正解是：{quiz['correct']}", icon="🚨")
-                    st.session_state.memory_pool[quiz['word']]["is_wrong"] = True
+            if st.session_state.current_quiz is None or st.session_state.current_quiz.get("mode_at_birth") != test_mode:
+                current_time = time.time()
+                ten_days_in_seconds = 10 * 24 * 60 * 60
+                if "智能复习模式" in test_mode:
+                    wrong_pool = [item for item in vocab if st.session_state.memory_pool.get(item['word'], {}).get("is_wrong", False)]
+                    if wrong_pool: correct_item = random.choice(wrong_pool)
+                    else:
+                        review_pool = [item for item in vocab if (current_time - st.session_state.memory_pool.get(item['word'], {}).get("last_correct_time", 0)) > ten_days_in_seconds]
+                        correct_item = random.choice(review_pool) if review_pool else random.choice(vocab)
+                else: 
+                    correct_item = random.choice(vocab)
                 
-                st.session_state.current_quiz = None
-                st.rerun()
+                options = [correct_item['meaning']]
+                while len(options) < 4:
+                    wrong_opt = random.choice(vocab)['meaning']
+                    if wrong_opt not in options: options.append(wrong_opt)
+                random.shuffle(options)
+                
+                st.session_state.current_quiz = {
+                    "word": correct_item['word'], 
+                    "correct": correct_item['meaning'], 
+                    "options": options, 
+                    "mode_at_birth": test_mode
+                }
+            
+            quiz = st.session_state.current_quiz
+            st.metric(label="🎯 答对率", value=f"{st.session_state.quiz_score} / {st.session_state.quiz_total}")
+            
+            is_w = st.session_state.memory_pool.get(quiz['word'], {}).get("is_wrong", False)
+            badge = "⚠️ 顽固错题重现：" if is_w and "智能复习模式" in test_mode else "请听题："
+            st.write(badge)
+            st.subheader(f"🎵 意语单词：{quiz['word']}")
+            
+            quiz_audio = get_local_audio(quiz['word'], prefix="quiz")
+            if quiz_audio and os.path.exists(quiz_audio):
+                st.audio(quiz_audio, format="audio/mp3")
+            
+            st.write("")
+            
+            for option in quiz['options']:
+                if st.button(option, use_container_width=True, key=f"quiz_opt_{option}"):
+                    st.session_state.quiz_total += 1
+                    if option == quiz['correct']:
+                        st.toast("🎉 答对了！", icon="✅")
+                        st.session_state.quiz_score += 1
+                        st.session_state.memory_pool[quiz['word']]["is_wrong"] = False
+                        st.session_state.memory_pool[quiz['word']]["last_correct_time"] = time.time()
+                    else:
+                        st.toast(f"❌ 答错啦！正解是：{quiz['correct']}", icon="🚨")
+                        st.session_state.memory_pool[quiz['word']]["is_wrong"] = True
+                        # === 【插入点：记录错题】 ===
+                        if quiz['word'] not in st.session_state.wrong_book:
+                            st.session_state.wrong_book.append(quiz['word'])
+                    
+                    st.session_state.current_quiz = None
+                    st.rerun()
+
+    with t2_b:
+        # === 【插入点：错题本展示】 ===
+        st.subheader("📚 错题笔记")
+        if not st.session_state.wrong_book:
+            st.success("目前没有错题，继续加油！")
+        else:
+            for w in st.session_state.wrong_book:
+                c1, c2 = st.columns([4, 1])
+                c1.write(f"❌ {w}")
+                if c2.button("移除", key=f"del_{w}"):
+                    st.session_state.wrong_book.remove(w)
+                    st.rerun()
 
 # ==================== 选项卡 3：歌词自由泛读 ====================
 with tab3:
@@ -263,14 +287,13 @@ with tab3:
                     st.audio(lyric_audio, format="audio/mp3")
             st.divider()
 
-# ==================== 🗂️ 选项卡 4：核心单词总表（智能语义雷达升级版） ====================
+# ==================== 🗂️ 选项卡 4：核心单词总表 ====================
 with tab4:
     st.subheader("🗂️ 核心单词总表面板")
     st.caption("告别冗长滑动！点击下方大分类按钮，即可瞬间精准切换对应的实战词汇。")
     
     vocab_list = st.session_state.vocab
     
-    # 初始化四个你期望看到的干净场景
     categories = {
         "🎵 音乐基础词汇": [],
         "🏫 上课常用词汇": [],
@@ -278,29 +301,19 @@ with tab4:
         "🌍 其他高频生存词": []
     }
     
-    # 🧠 【智能语义雷达】：扫描中文释义，根据留学生的高频动作词进行智能分配！
     for item in vocab_list:
         meaning = str(item.get('meaning', ''))
-        word = str(item.get('word', '')).lower()
         tag = str(item.get('pos', ''))
         
-        # 1. 扫描“音乐基础词汇”雷达：高音、低音、乐谱、音符、拍子、节奏
         if any(k in meaning for k in ["谱", "音", "唱", "声", "调", "节奏", "拍", "旋律", "小节"]) or any(k in tag for k in ["基础", "乐理"]):
             categories["🎵 音乐基础词汇"].append(item)
-            
-        # 2. 扫描“上课常用词汇”雷达：重复、开始、停、再来、看、听、解释、明白
         elif any(k in meaning for k in ["重复", "开始", "停", "再", "听", "看", "读", "写", "错", "对", "明白", "知道", "问", "回答", "从", "到"]):
             categories["🏫 上课常用词汇"].append(item)
-            
-        # 3. 扫描“排练演出词汇”雷达：舞台、幕、剧院、角色、服装、位置、走位、排练、乐团
         elif any(k in meaning for k in ["台", "幕", "剧", "演", "排练", "服装", "词", "走位", "位置", "动作", "灯光"]):
             categories["🎭 排练演出词汇"].append(item)
-            
-        # 4. 其他落入通用
         else:
             categories["🌍 其他高频生存词"].append(item)
 
-    # 强制让所有分类至少显示出来，哪怕它匹配到的是空列表，也不允许它隐藏
     all_scenes = ["🎵 音乐基础词汇", "🏫 上课常用词汇", "🎭 排练演出词汇", "🌍 其他高频生存词"]
         
     selected_cat = st.radio(
