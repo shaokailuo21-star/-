@@ -15,29 +15,6 @@ import time
 import os
 import re
 
-# --- 核心安全防护：内置标准保障词 ---
-DEFAULT_VOCAB = [
-    {"word": "Opera", "meaning": "歌剧", "pos": "名词"},
-    {"word": "Canto", "meaning": "声乐 / 演唱", "pos": "名词"},
-    {"word": "Soprano", "meaning": "女高音", "pos": "词汇"},
-    {"word": "Tenore", "meaning": "男高音", "pos": "词汇"}
-]
-
-try:
-    from vocab_data import MEGA_VOCAB, LYRIC_REPERTOIRE
-    if len(MEGA_VOCAB) < 4:
-        MEGA_VOCAB = MEGA_VOCAB + DEFAULT_VOCAB
-except ImportError:
-    MEGA_VOCAB = DEFAULT_VOCAB
-    LYRIC_REPERTOIRE = {
-        "《茶花女》- 饮酒歌 (Libiamo ne' lieti calici)": [
-            {"original": "Libiamo, libiamo ne' lieti calici", "translation": "让我们高举起欢乐的酒杯"},
-            {"original": "che la bellezza infiora", "translation": "这迷人的美景使人心醉"}
-        ]
-    }
-
-st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
-
 # --- 🎯 绝对稳定：本地静态音频管理器 ---
 @st.cache_resource
 def ensure_audio_dir():
@@ -60,9 +37,41 @@ def get_local_audio(text, prefix=""):
             return None
     return file_path
 
-# --- 核心状态初始化 ---
+# --- 🚀 核心数据桥梁：强力打通本地词库文件 ---
+DEFAULT_VOCAB = [
+    {"word": "Opera", "meaning": "歌剧", "pos": "核心术语"},
+    {"word": "Canto", "meaning": "声乐 / 演唱", "pos": "核心术语"},
+    {"word": "Soprano", "meaning": "女高音", "pos": "声部分类"},
+    {"word": "Tenore", "meaning": "男高音", "pos": "声部分类"}
+]
+
+# 优先读取实体 vocab_data.py 文件
+final_vocab_source = DEFAULT_VOCAB
+final_repertoire_source = {
+    "《茶花女》- 饮酒歌 (Libiamo ne' lieti calici)": [
+        {"original": "Libiamo, libiamo ne' lieti calici", "translation": "让我们高举起欢乐的酒杯"},
+        {"original": "che la bellezza infiora", "translation": "这迷人的美景使人心醉"}
+    ]
+}
+
+try:
+    import vocab_data
+    # 强制重新加载，确保文件内所有大词库被强行注入
+    import importlib
+    importlib.reload(vocab_data)
+    
+    if hasattr(vocab_data, "MEGA_VOCAB") and len(vocab_data.MEGA_VOCAB) >= 4:
+        final_vocab_source = vocab_data.MEGA_VOCAB
+    if hasattr(vocab_data, "LYRIC_REPERTOIRE"):
+        final_repertoire_source = vocab_data.LYRIC_REPERTOIRE
+except Exception:
+    pass
+
+st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
+
+# --- 核心状态初始化（确保第一次加载就把完整大词库灌进去） ---
 if "vocab" not in st.session_state:
-    st.session_state.vocab = MEGA_VOCAB
+    st.session_state.vocab = final_vocab_source
 
 if "memory_pool" not in st.session_state:
     st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in st.session_state.vocab}
@@ -78,6 +87,15 @@ if "current_quiz" not in st.session_state:
 
 # --- 侧边栏控制面板 ---
 st.sidebar.title("🎒 词库控制面板")
+
+# 增加一个物理刷新按钮，万一卡住可以手动一键归位
+if st.sidebar.button("🔄 强行重载本地大词库文件", use_container_width=True):
+    st.session_state.vocab = final_vocab_source
+    st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in final_vocab_source}
+    st.session_state.browse_index = 0
+    st.session_state.current_quiz = None
+    st.rerun()
+
 uploaded_file = st.sidebar.file_uploader("导入外部额外词库 (CSV)", type=["csv"], key="sidebar_uploader")
 
 if uploaded_file is not None:
@@ -85,7 +103,7 @@ if uploaded_file is not None:
         df = pd.read_csv(uploaded_file)
         if "word" in df.columns and "meaning" in df.columns:
             if "pos" not in df.columns:
-                df["pos"] = "未分类"
+                df["pos"] = "自定义导入"
             new_vocab = df.to_dict(orient="records")
             st.session_state.vocab = new_vocab
             st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in new_vocab}
@@ -101,7 +119,6 @@ st.sidebar.metric(label="🔴 当前顽固错题数", value=f"{wrong_count} 题"
 st.title("🇮🇹 意音圣经 · 声乐歌剧背词宝")
 st.caption("为中国留学生量身定制的音乐学院上课、排练、剧院生存刚需高频词库")
 
-# 增加四个选项卡，第四个为单词总表
 tab1, tab2, tab3, tab4 = st.tabs(["📖 实战泛读速记", "🕹️ 考前通关测试", "🎵 歌剧歌词自由泛读", "🗂️ 核心单词总表"])
 
 # ==================== 选项卡 1：浏览模式 ====================
@@ -111,7 +128,12 @@ with tab1:
     if vocab and idx < len(vocab):
         current_word = vocab[idx]
         
-        st.info(f"🇮🇹 单词： {current_word['word']}   [{current_word.get('pos', '未分类')}]")
+        # 补全分类标签的安全提取
+        c_tag = current_word.get('pos', '通用词汇')
+        if not str(c_tag).strip() or pd.isna(c_tag):
+            c_tag = "通用词汇"
+            
+        st.info(f"🇮🇹 单词： {current_word['word']}   [{c_tag}]")
         st.success(f"🇨🇳 释义： {current_word['meaning']}")
         
         audio_file = get_local_audio(current_word['word'], prefix="word")
@@ -225,8 +247,8 @@ with tab3:
                     final_lyrics.append({"original": line, "translation": "自定义输入"})
     
     else:
-        chosen_opera = st.selectbox("请选择要排练精读的内置唱段：", list(LYRIC_REPERTOIRE.keys()), key="opera_select")
-        final_lyrics = LYRIC_REPERTOIRE[chosen_opera]
+        chosen_opera = st.selectbox("请选择要排练精读的内置唱段：", list(final_repertoire_source.keys()), key="opera_select")
+        final_lyrics = final_repertoire_source[chosen_opera]
 
     if final_lyrics:
         st.divider()
@@ -247,7 +269,7 @@ with tab3:
     else:
         st.info("💡 期待你的台词！请在上方框中粘贴歌词。")
 
-# ==================== 🛠️ 选项卡 4：核心单词总表（新增） ====================
+# ==================== 🗂️ 选项卡 4：核心单词总表 ====================
 with tab4:
     st.subheader("🗂️ 词库字典总表面板")
     st.caption("以下单词根据功能或词性自动归类。点击单词折叠抽屉，可直接查看中文含义并播放纯正发音。")
@@ -257,35 +279,28 @@ with tab4:
     if not vocab_list:
         st.info("💡 当前词库空空如也，请先在左侧侧边栏导入词库。")
     else:
-        # 第一步：根据单词的 'pos' 属性在后台全自动提取分类标签
         categories = {}
         for item in vocab_list:
-            # 如果没有填分类，默认归为'通用词汇'
-            tag = item.get('pos', '').strip()
-            if not tag:
-                tag = "通用词汇"
+            tag = item.get('pos', '').strip() if item.get('pos') else ""
+            if not tag or pd.isna(tag):
+                tag = "通用高频词"
             if tag not in categories:
                 categories[tag] = []
             categories[tag].append(item)
             
-        # 第二步：循环将各个分类渲染出来
         for cat_name, items in categories.items():
-            # 采用官方原生防自动翻译篡改的隔离器卡片包装分类名
             st.markdown(f"#### 📦 {cat_name} ({len(items)} 个词)")
             
-            # 第三步：在当前分类内，循环渲染每一个单词折叠栏
             for word_idx, word_item in enumerate(items):
                 w_text = word_item['word']
                 w_meaning = word_item['meaning']
                 
-                # 为每个折叠抽屉加上唯一的 key 锁死，防止点击时跳回第一个 Tab
                 with st.expander(f"🇮🇹 {w_text}", expanded=False):
                     col_m, col_a = st.columns([5, 3])
                     with col_m:
                         st.info(f"🇨🇳 中文释义：{w_meaning}")
                     with col_a:
-                        # 字典总表专用前缀，独立缓存音频
                         dict_audio = get_local_audio(w_text, prefix=f"dict_{cat_name}_{word_idx}")
                         if dict_audio and os.path.exists(dict_audio):
                             st.audio(dict_audio, format="audio/mp3")
-            st.write("") # 留空隔离，保持优美排版
+            st.write("")
