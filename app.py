@@ -1,70 +1,65 @@
 import streamlit as st
 import random
-import time
 
-# 1. 强制页面布局
-st.set_page_config(page_title="意音圣经 · 背词宝", layout="centered")
+# 设置页面
+st.set_page_config(page_title="意音圣经", layout="centered")
 
-# 2. 初始化核心数据（保底词库）
+# 1. 绝对安全的初始化逻辑
 if "vocab" not in st.session_state:
     st.session_state.vocab = [
         {"word": "Spartito", "meaning": "乐谱", "pos": "音乐基础"},
         {"word": "Ripetere", "meaning": "重复", "pos": "上课常用"},
-        {"word": "Sipario", "meaning": "帷幕", "pos": "排练演出"},
-        {"word": "Soprano", "meaning": "女高音", "pos": "音乐基础"}
+        {"word": "Sipario", "meaning": "帷幕", "pos": "排练演出"}
     ]
+if "browse_index" not in st.session_state:
     st.session_state.browse_index = 0
-
-# 3. 侧边栏
-if st.sidebar.button("🔄 刷新词库数据"):
-    st.rerun()
 
 st.title("🇮🇹 意音圣经 · 背词宝")
 
-# 4. 四大板块实现
+# 2. 四大板块
 tab1, tab2, tab3, tab4 = st.tabs(["📖 泛读", "🕹️ 测试", "🎵 歌词", "🗂️ 总表"])
 
-# 板块 1：泛读模式
 with tab1:
     st.subheader("实战泛读速记")
+    # 只要 session_state 初始化了，这里就不会报错
+    vocab = st.session_state.vocab
     idx = st.session_state.browse_index
-    current = st.session_state.vocab[idx]
+    
+    current = vocab[idx]
     st.info(f"单词: {current['word']}")
     st.success(f"含义: {current['meaning']}")
-    if st.button("下一个单词"):
-        st.session_state.browse_index = (idx + 1) % len(st.session_state.vocab)
+    
+    if st.button("下一个"):
+        st.session_state.browse_index = (idx + 1) % len(vocab)
         st.rerun()
 
-# 板块 2：测试模式
 with tab2:
     st.subheader("考前通关测试")
-    if st.button("开始挑战"):
+    st.write("点击按钮开始随机测试")
+    if st.button("抽一题"):
         q = random.choice(st.session_state.vocab)
-        st.write(f"请问 {q['word']} 是什么意思？")
-        st.write(f"答案是: {q['meaning']}")
+        st.write(f"单词: {q['word']}")
+        st.write(f"含义: {q['meaning']}")
 
-# 板块 3：歌词模式
 with tab3:
-    st.subheader("歌剧歌词自由泛读")
-    st.text_area("粘贴歌词进行练习：", height=100)
-    st.write("请粘贴歌词并查看分段分析。")
+    st.subheader("歌剧歌词泛读")
+    st.write("待开发内容")
 
-# 板块 4：总表模式（带强制归类）
 with tab4:
     st.subheader("核心单词总表")
-    vocab = st.session_state.vocab
-    
-    # 将词库分类
-    cats = {
-        "🎵 音乐基础": [i for i in vocab if "基础" in i['pos']],
-        "🏫 上课常用": [i for i in vocab if "上课" in i['pos']],
-        "🎭 排练演出": [i for i in vocab if "排练" in i['pos']]
+    # 定义分类，这里简单匹配
+    cat_map = {
+        "音乐基础": "基础",
+        "上课常用": "上课",
+        "排练演出": "排练"
     }
     
-    # 强制分类按钮
-    choice = st.radio("场景切换", list(cats.keys()), horizontal=True)
-    words = cats[choice]
+    choice = st.radio("选择分类", list(cat_map.keys()), horizontal=True)
     
-    st.write(f"当前场景: {choice} (共 {len(words)} 个词)")
-    for item in words:
-        st.expander(item['word']).write(item['meaning'])
+    # 过滤筛选
+    filtered = [i for i in st.session_state.vocab if cat_map[choice] in i['pos']]
+    
+    st.write(f"当前场景: {choice} (共 {len(filtered)} 个词)")
+    for item in filtered:
+        with st.expander(item['word']):
+            st.write(item['meaning'])
