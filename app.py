@@ -37,15 +37,14 @@ def get_local_audio(text, prefix=""):
             return None
     return file_path
 
-# --- 🚀 核心数据桥梁：强力打通本地词库文件 ---
+# --- 🚀 核心数据安全防护垫 ---
 DEFAULT_VOCAB = [
-    {"word": "Opera", "meaning": "歌剧", "pos": "核心术语"},
-    {"word": "Canto", "meaning": "声乐 / 演唱", "pos": "核心术语"},
-    {"word": "Soprano", "meaning": "女高音", "pos": "声部分类"},
-    {"word": "Tenore", "meaning": "男高音", "pos": "声部分类"}
+    {"word": "Spartito", "meaning": "乐谱", "pos": "音乐基础词汇"},
+    {"word": "Ripetere", "meaning": "再重复一遍", "pos": "上课常用词汇"},
+    {"word": "Sipario", "meaning": "舞台帷幕", "pos": "排练演出词汇"},
+    {"word": "Soprano", "meaning": "女高音", "pos": "音乐基础词汇"}
 ]
 
-# 优先读取实体 vocab_data.py 文件
 final_vocab_source = DEFAULT_VOCAB
 final_repertoire_source = {
     "《茶花女》- 饮酒歌 (Libiamo ne' lieti calici)": [
@@ -54,26 +53,33 @@ final_repertoire_source = {
     ]
 }
 
+# --- 🔍 破案追踪器：强力动态加载本地大词库文件 ---
+debug_error_message = None
 try:
-    import vocab_data
-    # 强制重新加载，确保文件内所有大词库被强行注入
-    import importlib
-    importlib.reload(vocab_data)
-    
-    if hasattr(vocab_data, "MEGA_VOCAB") and len(vocab_data.MEGA_VOCAB) >= 4:
-        final_vocab_source = vocab_data.MEGA_VOCAB
-    if hasattr(vocab_data, "LYRIC_REPERTOIRE"):
-        final_repertoire_source = vocab_data.LYRIC_REPERTOIRE
-except Exception:
-    pass
+    if os.path.exists("vocab_data.py"):
+        import vocab_data
+        import importlib
+        importlib.reload(vocab_data)
+        
+        if hasattr(vocab_data, "MEGA_VOCAB") and isinstance(vocab_data.MEGA_VOCAB, list) and len(vocab_data.MEGA_VOCAB) > 0:
+            final_vocab_source = vocab_data.MEGA_VOCAB
+        else:
+            debug_error_message = "成功找到了 vocab_data.py，但里面的 MEGA_VOCAB 似乎是空的。"
+            
+        if hasattr(vocab_data, "LYRIC_REPERTOIRE") and isinstance(vocab_data.LYRIC_REPERTOIRE, dict):
+            final_repertoire_source = vocab_data.LYRIC_REPERTOIRE
+except Exception as e:
+    debug_error_message = f"读取 vocab_data.py 发生编译错误！错误详情：{str(e)}"
 
+# 设置页面属性
 st.set_page_config(page_title="意音圣经 · 声乐歌剧生存背词宝 🇮🇹", page_icon="🇮🇹", layout="centered")
 
-# --- 核心状态初始化（确保第一次加载就把完整大词库灌进去） ---
-if "vocab" not in st.session_state:
-    st.session_state.vocab = final_vocab_source
+# --- 强制破除 Streamlit 会话锁死 ---
+if "vocab" not in st.session_state or len(st.session_state.vocab) <= 4:
+    if len(final_vocab_source) > 4:
+        st.session_state.vocab = final_vocab_source
 
-if "memory_pool" not in st.session_state:
+if "memory_pool" not in st.session_state or len(st.session_state.memory_pool) <= 4:
     st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in st.session_state.vocab}
 
 if "browse_index" not in st.session_state:
@@ -88,8 +94,7 @@ if "current_quiz" not in st.session_state:
 # --- 侧边栏控制面板 ---
 st.sidebar.title("🎒 词库控制面板")
 
-# 增加一个物理刷新按钮，万一卡住可以手动一键归位
-if st.sidebar.button("🔄 强行重载本地大词库文件", use_container_width=True):
+if st.sidebar.button("🚨 强行擦除缓存，灌入本地大词库", use_container_width=True):
     st.session_state.vocab = final_vocab_source
     st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in final_vocab_source}
     st.session_state.browse_index = 0
@@ -108,6 +113,7 @@ if uploaded_file is not None:
             st.session_state.vocab = new_vocab
             st.session_state.memory_pool = {item['word']: {"last_correct_time": 0, "is_wrong": False} for item in new_vocab}
             st.sidebar.success(f"成功导入 {len(new_vocab)} 个外部单词！")
+            st.rerun()
         else:
             st.sidebar.error("CSV 文件必须包含 'word' 和 'meaning' 两列！")
     except Exception as e:
@@ -119,6 +125,9 @@ st.sidebar.metric(label="🔴 当前顽固错题数", value=f"{wrong_count} 题"
 st.title("🇮🇹 意音圣经 · 声乐歌剧背词宝")
 st.caption("为中国留学生量身定制的音乐学院上课、排练、剧院生存刚需高频词库")
 
+if debug_error_message:
+    st.error(f"⚠️ 词库文件加载异常提示：\n{debug_error_message}")
+
 tab1, tab2, tab3, tab4 = st.tabs(["📖 实战泛读速记", "🕹️ 考前通关测试", "🎵 歌剧歌词自由泛读", "🗂️ 核心单词总表"])
 
 # ==================== 选项卡 1：浏览模式 ====================
@@ -127,12 +136,7 @@ with tab1:
     idx = st.session_state.browse_index
     if vocab and idx < len(vocab):
         current_word = vocab[idx]
-        
-        # 补全分类标签的安全提取
         c_tag = current_word.get('pos', '通用词汇')
-        if not str(c_tag).strip() or pd.isna(c_tag):
-            c_tag = "通用词汇"
-            
         st.info(f"🇮🇹 单词： {current_word['word']}   [{c_tag}]")
         st.success(f"🇨🇳 释义： {current_word['meaning']}")
         
@@ -218,7 +222,6 @@ with tab2:
 # ==================== 选项卡 3：歌词自由泛读 ====================
 with tab3:
     st.subheader("🎼 歌剧歌词智能泛读面板")
-    
     lyric_source = st.radio("选择歌词来源：", ["📋 自由复制粘贴全新歌词", "📚 浏览经典内置唱段"], horizontal=True, key="lyric_src_radio")
     
     final_lyrics = []
@@ -227,13 +230,7 @@ with tab3:
     if lyric_source == "📋 自由复制粘贴全新歌词":
         st.markdown("#### 📥 请在下方粘贴你的意大利语歌词")
         input_title = st.text_input("给这首歌曲起个名字（可选）：", placeholder="例如：Aria di Chiesa", key="song_title_input")
-        
-        user_lyric_text = st.text_area(
-            "把整段意大利语歌词直接粘贴在下面：", 
-            placeholder="Libiamo, libiamo ne' lieti calici...",
-            height=150,
-            key="lyrics_text_area"
-        )
+        user_lyric_text = st.text_area("把整段意大利语歌词直接粘贴在下面：", placeholder="Libiamo, libiamo ne' lieti calici...", height=150, key="lyrics_text_area")
         
         if user_lyric_text.strip():
             raw_lines = [line.strip() for line in user_lyric_text.split("\n") if line.strip()]
@@ -245,7 +242,6 @@ with tab3:
                             final_lyrics.append({"original": sub.strip(), "translation": "自定义输入"})
                 else:
                     final_lyrics.append({"original": line, "translation": "自定义输入"})
-    
     else:
         chosen_opera = st.selectbox("请选择要排练精读的内置唱段：", list(final_repertoire_source.keys()), key="opera_select")
         final_lyrics = final_repertoire_source[chosen_opera]
@@ -266,41 +262,68 @@ with tab3:
                 if lyric_audio and os.path.exists(lyric_audio):
                     st.audio(lyric_audio, format="audio/mp3")
             st.divider()
-    else:
-        st.info("💡 期待你的台词！请在上方框中粘贴歌词。")
 
-# ==================== 🗂️ 选项卡 4：核心单词总表 ====================
+# ==================== 🗂️ 选项卡 4：核心单词总表（场景点击升级版） ====================
 with tab4:
-    st.subheader("🗂️ 词库字典总表面板")
-    st.caption("以下单词根据功能或词性自动归类。点击单词折叠抽屉，可直接查看中文含义并播放纯正发音。")
+    st.subheader("🗂️ 核心单词总表面板")
+    st.caption("告别冗长滑动！点击上方大分类按钮，即可瞬间精准切换对应的实战词汇。")
     
     vocab_list = st.session_state.vocab
     
     if not vocab_list:
         st.info("💡 当前词库空空如也，请先在左侧侧边栏导入词库。")
     else:
-        categories = {}
+        # 【核心逻辑重塑】：建立场景字典，并进行智能兼容
+        categories = {
+            "🎵 音乐基础词汇": [],
+            "🏫 上课常用词汇": [],
+            "🎭 排练演出词汇": [],
+            "🌍 其他高频生存词": []
+        }
+        
         for item in vocab_list:
-            tag = item.get('pos', '').strip() if item.get('pos') else ""
-            if not tag or pd.isna(tag):
-                tag = "通用高频词"
-            if tag not in categories:
-                categories[tag] = []
-            categories[tag].append(item)
+            tag = str(item.get('pos', '')).strip()
             
-        for cat_name, items in categories.items():
-            st.markdown(f"#### 📦 {cat_name} ({len(items)} 个词)")
+            # 智能映射：如果用户词库里已经写了新场景词则精准匹配；如果是旧词性（动词/名词等），自动妥协并合并到“其他高频生存词”
+            if "基础" in tag or "乐理" in tag or "音乐基础词汇" in tag:
+                categories["🎵 音乐基础词汇"].append(item)
+            elif "上课" in tag or "常用" in tag or "课堂" in tag or "上课常用词汇" in tag:
+                categories["🏫 上课常用词汇"].append(item)
+            elif "排练" in tag or "演出" in tag or "舞台" in tag or "剧院" in tag or "排练演出词汇" in tag:
+                categories["🎭 排练演出词汇"].append(item)
+            else:
+                categories["🌍 其他高频生存词"].append(item)
+
+        # 【告别长滑，变成卡片式快速切换按钮】
+        available_tabs = [cat for cat, words in categories.items() if len(words) > 0]
+        
+        if not available_tabs:
+            # 如果全部落入兜底
+            available_tabs = ["🌍 其他高频生存词"]
+            categories["🌍 其他高频生存词"] = vocab_list
             
-            for word_idx, word_item in enumerate(items):
-                w_text = word_item['word']
-                w_meaning = word_item['meaning']
-                
-                with st.expander(f"🇮🇹 {w_text}", expanded=False):
-                    col_m, col_a = st.columns([5, 3])
-                    with col_m:
-                        st.info(f"🇨🇳 中文释义：{w_meaning}")
-                    with col_a:
-                        dict_audio = get_local_audio(w_text, prefix=f"dict_{cat_name}_{word_idx}")
-                        if dict_audio and os.path.exists(dict_audio):
-                            st.audio(dict_audio, format="audio/mp3")
-            st.write("")
+        selected_cat = st.radio(
+            "👇 **请选择你想查看的生存场景：**", 
+            options=available_tabs, 
+            horizontal=True, 
+            key="category_selector_radio"
+        )
+        
+        st.divider()
+        
+        # 精准呈现被点击的那一组分类
+        target_words = categories[selected_cat]
+        st.markdown(f"### 当前场景：{selected_cat} *({len(target_words)} 个词)*")
+        
+        for word_idx, word_item in enumerate(target_words):
+            w_text = word_item['word']
+            w_meaning = word_item['meaning']
+            
+            with st.expander(f"🇮🇹 {w_text}", expanded=False):
+                col_m, col_a = st.columns([5, 3])
+                with col_m:
+                    st.info(f"🇨🇳 中文释义：{w_meaning}")
+                with col_a:
+                    dict_audio = get_local_audio(w_text, prefix=f"dict_scene_{selected_cat}_{word_idx}")
+                    if dict_audio and os.path.exists(dict_audio):
+                        st.audio(dict_audio, format="audio/mp3")
